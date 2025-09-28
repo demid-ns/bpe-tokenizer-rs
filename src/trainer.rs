@@ -10,56 +10,58 @@ impl Trainer {
     }
 
     pub fn train(&self, training_texts: &[&str]) -> HashMap<Vec<String>, usize> {
-        let mut vocab = Self::get_vocab(training_texts);
+        let mut word_freqs = Self::build_word_frequencies(training_texts);
 
         for _ in 1..=self.num_merges {
-            let pair_counts = Self::get_pair_counts(&vocab);
+            let pair_freqs = Self::get_pair_frequencies(&word_freqs);
 
-            if let Some(most_frequent) = Self::get_most_frequent_pair(&pair_counts) {
-                vocab = Self::merge_most_frequent_pair(&vocab, &most_frequent);
+            if let Some(most_common_pair) = Self::get_most_common_pair(&pair_freqs) {
+                word_freqs = Self::merge_pair(&word_freqs, &most_common_pair);
             } else {
                 break;
             }
         }
 
-        vocab
+        word_freqs
     }
 
-    fn get_vocab(training_texts: &[&str]) -> HashMap<Vec<String>, usize> {
-        let mut vocab = HashMap::new();
+    fn build_word_frequencies(training_texts: &[&str]) -> HashMap<Vec<String>, usize> {
+        let mut word_freqs = HashMap::new();
 
         training_texts
             .iter()
             .flat_map(|text| text.split_whitespace())
             .map(|word| {
-                let mut tokens: Vec<String> = word.chars().map(|c| c.to_string()).collect();
-                tokens.push("</w>".to_string());
-                tokens
+                let mut symbols: Vec<String> = word.chars().map(|c| c.to_string()).collect();
+                symbols.push("<\\w>".to_string());
+                symbols
             })
-            .for_each(|tokens| {
-                *vocab.entry(tokens).or_insert(0) += 1;
+            .for_each(|symbols| {
+                *word_freqs.entry(symbols).or_insert(0) += 1;
             });
 
-        vocab
+        word_freqs
     }
 
-    fn get_pair_counts(vocab: &HashMap<Vec<String>, usize>) -> HashMap<(String, String), usize> {
-        let mut pair_counts = HashMap::new();
+    fn get_pair_frequencies(
+        word_freqs: &HashMap<Vec<String>, usize>,
+    ) -> HashMap<(String, String), usize> {
+        let mut pair_freqs = HashMap::new();
 
-        vocab.iter().for_each(|(tokens, &count)| {
-            tokens.windows(2).for_each(|pair| {
+        word_freqs.iter().for_each(|(symbols, &count)| {
+            symbols.windows(2).for_each(|pair| {
                 let key = (pair[0].clone(), pair[1].clone());
-                *pair_counts.entry(key).or_insert(0) += count;
+                *pair_freqs.entry(key).or_insert(0) += count;
             });
         });
 
-        pair_counts
+        pair_freqs
     }
 
-    fn get_most_frequent_pair(
-        pair_counts: &HashMap<(String, String), usize>,
+    fn get_most_common_pair(
+        pair_freqs: &HashMap<(String, String), usize>,
     ) -> Option<(String, String)> {
-        pair_counts
+        pair_freqs
             .iter()
             .max_by(|(pair_a, count_a), (pair_b, count_b)| {
                 match count_a.cmp(count_b) {
@@ -70,140 +72,138 @@ impl Trainer {
             .map(|(pair, _)| pair.clone())
     }
 
-    fn merge_most_frequent_pair(
-        vocab: &HashMap<Vec<String>, usize>,
+    fn merge_pair(
+        word_freqs: &HashMap<Vec<String>, usize>,
         pair: &(String, String),
     ) -> HashMap<Vec<String>, usize> {
-        let mut merged_vocab = HashMap::new();
-        let pair_to_merge = format!("{}{}", pair.0, pair.1);
+        let mut merged_word_freqs = HashMap::new();
+        let merged_symbol = format!("{}{}", pair.0, pair.1);
 
-        for (tokens, &count) in vocab {
+        for (symbols, &count) in word_freqs {
             let mut i = 0;
-            let mut merged_tokens = Vec::new();
+            let mut merged_symbols = Vec::new();
 
-            while i < tokens.len() {
-                if i + 1 < tokens.len() && tokens[i] == pair.0 && tokens[i + 1] == pair.1 {
-                    merged_tokens.push(pair_to_merge.clone());
+            while i < symbols.len() {
+                if i + 1 < symbols.len() && symbols[i] == pair.0 && symbols[i + 1] == pair.1 {
+                    merged_symbols.push(merged_symbol.clone());
                     i += 2;
                 } else {
-                    merged_tokens.push(tokens[i].clone());
+                    merged_symbols.push(symbols[i].clone());
                     i += 1;
                 }
             }
 
-            *merged_vocab.entry(merged_tokens).or_insert(0) += count;
+            *merged_word_freqs.entry(merged_symbols).or_insert(0) += count;
         }
 
-        merged_vocab
+        merged_word_freqs
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::vec;
-
     use super::*;
 
     #[test]
-    fn train_no_merges() {
+    fn train_no_merges_returns_word_frequencies() {
         let trainer = Trainer::new(0);
         let result = trainer.train(&vec!["banana banana nana", "banana"]);
 
         let expected: HashMap<Vec<String>, usize> =
-            HashMap::from([(to_tokens("banana"), 3), (to_tokens("nana"), 1)]);
+            HashMap::from([(to_symbols("banana"), 3), (to_symbols("nana"), 1)]);
 
         assert_eq!(result, expected);
     }
 
     #[test]
-    fn train_with_merges() {
+    fn train_with_merges_applies_merges_correctly() {
         let trainer = Trainer::new(2);
         let result = trainer.train(&vec!["banana banana nana", "banana"]);
 
         let expected: HashMap<Vec<String>, usize> = HashMap::from([
-            (to_vec_tokens(&["b", "a", "nana", "</w>"]), 3),
-            (to_vec_tokens(&["nana", "</w>"]), 1),
+            (to_vec_symbols(&["b", "a", "nana", "<\\w>"]), 3),
+            (to_vec_symbols(&["nana", "<\\w>"]), 1),
         ]);
 
         assert_eq!(result, expected);
     }
 
     #[test]
-    fn train_with_max_merges() {
+    fn train_with_max_merges_merges_all_possible() {
         let trainer = Trainer::new(10);
         let result = trainer.train(&vec!["banana banana nana", "banana"]);
 
         let expected: HashMap<Vec<String>, usize> = HashMap::from([
-            (to_vec_tokens(&["banana</w>"]), 3),
-            (to_vec_tokens(&["nana</w>"]), 1),
+            (to_vec_symbols(&["banana<\\w>"]), 3),
+            (to_vec_symbols(&["nana<\\w>"]), 1),
         ]);
 
         assert_eq!(result, expected);
     }
 
     #[test]
-    fn get_vocab_two_texts() {
-        let result = Trainer::get_vocab(&vec!["banana banana nana", "banana"]);
+    fn build_word_frequencies_two_texts() {
+        let result = Trainer::build_word_frequencies(&vec!["banana banana nana", "banana"]);
 
         let expected: HashMap<Vec<String>, usize> =
-            HashMap::from([(to_tokens("banana"), 3), (to_tokens("nana"), 1)]);
+            HashMap::from([(to_symbols("banana"), 3), (to_symbols("nana"), 1)]);
 
         assert_eq!(result, expected);
     }
 
     #[test]
-    fn get_vocab_punctuation() {
-        let result = Trainer::get_vocab(&vec!["banana ,! banana,", "banana"]);
+    fn build_word_frequencies_with_punctuation() {
+        let result = Trainer::build_word_frequencies(&vec!["banana ,! banana,", "banana"]);
 
         let expected: HashMap<Vec<String>, usize> = HashMap::from([
-            (to_tokens("banana"), 2),
-            (to_tokens("banana,"), 1),
-            (to_tokens(",!"), 1),
+            (to_symbols("banana"), 2),
+            (to_symbols("banana,"), 1),
+            (to_symbols(",!"), 1),
         ]);
 
         assert_eq!(result, expected);
     }
 
     #[test]
-    fn get_vocab_empty() {
-        let result = Trainer::get_vocab(&vec![]);
+    fn build_word_frequencies_empty_input() {
+        let result = Trainer::build_word_frequencies(&vec![]);
 
         let expected: HashMap<Vec<String>, usize> = HashMap::new();
 
         assert_eq!(result, expected);
     }
 
-    fn to_tokens(word: &str) -> Vec<String> {
-        let mut tokens: Vec<String> = word.chars().map(|c| c.to_string()).collect();
-        tokens.push("</w>".to_string());
-        tokens
+    fn to_symbols(word: &str) -> Vec<String> {
+        let mut symbols: Vec<String> = word.chars().map(|c| c.to_string()).collect();
+        symbols.push("<\\w>".to_string());
+        symbols
     }
 
     #[test]
-    fn get_pair_counts_some() {
-        let vocab = Trainer::get_vocab(&vec!["banana banana nana", "banana"]);
+    fn get_pair_frequencies_some_pairs() {
+        let word_freqs = Trainer::build_word_frequencies(&vec!["banana banana nana", "banana"]);
 
-        let pair_counts = Trainer::get_pair_counts(&vocab);
+        let pair_freqs = Trainer::get_pair_frequencies(&word_freqs);
 
         let expected_result = HashMap::from([
             (to_pair_count(("a", "n"), 7)),
-            (to_pair_count(("a", "</w>"), 4)),
+            (to_pair_count(("a", "<\\w>"), 4)),
             (to_pair_count(("n", "a"), 8)),
             (to_pair_count(("b", "a"), 3)),
         ]);
 
-        assert_eq!(pair_counts, expected_result);
+        assert_eq!(pair_freqs, expected_result);
     }
 
     #[test]
-    fn get_pair_counts_empty() {
-        let vocab = Trainer::get_vocab(&vec![]);
+    fn get_pair_frequencies_empty() {
+        let word_freqs = Trainer::build_word_frequencies(&vec![]);
 
-        let pair_counts = Trainer::get_pair_counts(&vocab);
+        let pair_freqs = Trainer::get_pair_frequencies(&word_freqs);
 
         let expected_result = HashMap::new();
 
-        assert_eq!(pair_counts, expected_result);
+        assert_eq!(pair_freqs, expected_result);
     }
 
     fn to_pair_count(pair: (&str, &str), count: usize) -> ((String, String), usize) {
@@ -211,75 +211,76 @@ mod tests {
     }
 
     #[test]
-    fn get_most_frequent_pair_some() {
-        let vocab = Trainer::get_vocab(&vec!["banana banana nana", "banana"]);
+    fn get_most_common_pair_some() {
+        let word_freqs = Trainer::build_word_frequencies(&vec!["banana banana nana", "banana"]);
 
-        let pair_counts = Trainer::get_pair_counts(&vocab);
+        let pair_freqs = Trainer::get_pair_frequencies(&word_freqs);
 
-        let result = Trainer::get_most_frequent_pair(&pair_counts);
+        let result = Trainer::get_most_common_pair(&pair_freqs);
 
         assert_eq!(result, Some(("n".to_string(), "a".to_string())));
     }
 
     #[test]
-    fn get_most_frequent_pair_none() {
-        let most_frequent_pair = Trainer::get_most_frequent_pair(&HashMap::new());
-        assert_eq!(most_frequent_pair, None);
+    fn get_most_common_pair_none() {
+        let most_common_pair = Trainer::get_most_common_pair(&HashMap::new());
+        assert_eq!(most_common_pair, None);
     }
 
     #[test]
-    fn get_most_frequent_pair_peaks_lexicographically_smallest() {
-        let mut pair_counts = HashMap::new();
-        pair_counts.insert(("z".to_string(), "a".to_string()), 3);
-        pair_counts.insert(("a".to_string(), "b".to_string()), 3);
-        pair_counts.insert(("c".to_string(), "d".to_string()), 3);
+    fn get_most_common_pair_breaks_tie_lexicographically() {
+        let mut pair_freqs = HashMap::new();
+        pair_freqs.insert(("z".to_string(), "a".to_string()), 3);
+        pair_freqs.insert(("a".to_string(), "b".to_string()), 3);
+        pair_freqs.insert(("c".to_string(), "d".to_string()), 3);
 
-        let result = Trainer::get_most_frequent_pair(&pair_counts);
+        let result = Trainer::get_most_common_pair(&pair_freqs);
 
         assert_eq!(result, Some(("z".to_string(), "a".to_string())));
     }
 
     #[test]
-    fn merge_most_frequent_pair_some() {
-        let vocab = Trainer::get_vocab(&vec!["banana banana nana", "banana"]);
+    fn merge_pair_some() {
+        let word_freqs = Trainer::build_word_frequencies(&vec!["banana banana nana", "banana"]);
 
-        let pair_counts = Trainer::get_pair_counts(&vocab);
-        let most_frequent_pair = Trainer::get_most_frequent_pair(&pair_counts);
+        let pair_freqs = Trainer::get_pair_frequencies(&word_freqs);
+        let most_common_pair = Trainer::get_most_common_pair(&pair_freqs);
 
-        let result = Trainer::merge_most_frequent_pair(&vocab, &most_frequent_pair.unwrap());
+        let result = Trainer::merge_pair(&word_freqs, &most_common_pair.unwrap());
 
         let expected_result = HashMap::from([
-            (to_vec_tokens(&["b", "a", "na", "na", "</w>"]), 3),
-            (to_vec_tokens(&["na", "na", "</w>"]), 1),
+            (to_vec_symbols(&["b", "a", "na", "na", "<\\w>"]), 3),
+            (to_vec_symbols(&["na", "na", "<\\w>"]), 1),
         ]);
 
         assert_eq!(result, expected_result);
     }
 
     #[test]
-    fn merge_most_frequent_pair_punctuation() {
-        let vocab = Trainer::get_vocab(&vec!["banana , , , , banana nana , ,!", "banana!!!"]);
+    fn merge_pair_with_punctuation() {
+        let word_freqs =
+            Trainer::build_word_frequencies(&vec!["banana , , , , banana nana , ,!", "banana!!!"]);
 
-        let pair_counts = Trainer::get_pair_counts(&vocab);
-        let most_frequent_pair = Trainer::get_most_frequent_pair(&pair_counts);
+        let pair_freqs = Trainer::get_pair_frequencies(&word_freqs);
+        let most_common_pair = Trainer::get_most_common_pair(&pair_freqs);
 
-        let result = Trainer::merge_most_frequent_pair(&vocab, &most_frequent_pair.unwrap());
+        let result = Trainer::merge_pair(&word_freqs, &most_common_pair.unwrap());
 
         let expected_result = HashMap::from([
             (
-                to_vec_tokens(&["b", "a", "na", "na", "!", "!", "!", "</w>"]),
+                to_vec_symbols(&["b", "a", "na", "na", "!", "!", "!", "<\\w>"]),
                 1,
             ),
-            (to_vec_tokens(&[",", "!", "</w>"]), 1),
-            (to_vec_tokens(&["na", "na", "</w>"]), 1),
-            (to_vec_tokens(&[",", "</w>"]), 5),
-            (to_vec_tokens(&["b", "a", "na", "na", "</w>"]), 2),
+            (to_vec_symbols(&[",", "!", "<\\w>"]), 1),
+            (to_vec_symbols(&["na", "na", "<\\w>"]), 1),
+            (to_vec_symbols(&[",", "<\\w>"]), 5),
+            (to_vec_symbols(&["b", "a", "na", "na", "<\\w>"]), 2),
         ]);
 
         assert_eq!(result, expected_result);
     }
 
-    fn to_vec_tokens(tokens: &[&str]) -> Vec<String> {
-        tokens.iter().map(|t| t.to_string()).collect()
+    fn to_vec_symbols(symbols: &[&str]) -> Vec<String> {
+        symbols.iter().map(|t| t.to_string()).collect()
     }
 }
