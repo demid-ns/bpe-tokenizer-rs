@@ -62,9 +62,8 @@ impl Trainer {
         pair_counts
             .iter()
             .max_by(|(pair_a, count_a), (pair_b, count_b)| {
-                // First compare counts
                 match count_a.cmp(count_b) {
-                    std::cmp::Ordering::Equal => pair_b.cmp(pair_a), // tie-break lexicographically (smallest first)
+                    std::cmp::Ordering::Equal => pair_a.cmp(pair_b), // pick lexicographically smallest
                     other => other,
                 }
             })
@@ -122,8 +121,21 @@ mod tests {
         let result = trainer.train(&vec!["banana banana nana", "banana"]);
 
         let expected: HashMap<Vec<String>, usize> = HashMap::from([
-            (to_vec_tokens(&["b", "a", "na", "na</w>"]), 3),
-            (to_vec_tokens(&["na", "na</w>"]), 1),
+            (to_vec_tokens(&["b", "a", "nana", "</w>"]), 3),
+            (to_vec_tokens(&["nana", "</w>"]), 1),
+        ]);
+
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn train_with_max_merges() {
+        let trainer = Trainer::new(10);
+        let result = trainer.train(&vec!["banana banana nana", "banana"]);
+
+        let expected: HashMap<Vec<String>, usize> = HashMap::from([
+            (to_vec_tokens(&["banana</w>"]), 3),
+            (to_vec_tokens(&["nana</w>"]), 1),
         ]);
 
         assert_eq!(result, expected);
@@ -216,7 +228,7 @@ mod tests {
     }
 
     #[test]
-    fn get_most_frequent_pair_lexicographic_tiebreak() {
+    fn get_most_frequent_pair_peaks_lexicographically_smallest() {
         let mut pair_counts = HashMap::new();
         pair_counts.insert(("z".to_string(), "a".to_string()), 3);
         pair_counts.insert(("a".to_string(), "b".to_string()), 3);
@@ -224,7 +236,7 @@ mod tests {
 
         let result = Trainer::get_most_frequent_pair(&pair_counts);
 
-        assert_eq!(result, Some(("a".to_string(), "b".to_string())));
+        assert_eq!(result, Some(("z".to_string(), "a".to_string())));
     }
 
     #[test]
