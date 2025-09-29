@@ -9,7 +9,8 @@ impl Trainer {
         Self { num_merges }
     }
 
-    pub fn train(&self, training_texts: &[&str]) -> HashMap<Vec<String>, usize> {
+    pub fn train(&self, training_texts: &[&str]) -> Vec<(String, String)> {
+        let mut merges = Vec::new();
         let mut word_freqs = Self::build_word_frequencies(training_texts);
 
         for _ in 1..=self.num_merges {
@@ -17,12 +18,13 @@ impl Trainer {
 
             if let Some(most_common_pair) = Self::get_most_common_pair(&pair_freqs) {
                 word_freqs = Self::merge_pair(&word_freqs, &most_common_pair);
+                merges.push(most_common_pair);
             } else {
                 break;
             }
         }
 
-        word_freqs
+        merges
     }
 
     fn build_word_frequencies(training_texts: &[&str]) -> HashMap<Vec<String>, usize> {
@@ -33,7 +35,7 @@ impl Trainer {
             .flat_map(|text| text.split_whitespace())
             .map(|word| {
                 let mut symbols: Vec<String> = word.chars().map(|c| c.to_string()).collect();
-                symbols.push("<\\w>".to_string());
+                symbols.push("</w>".to_string());
                 symbols
             })
             .for_each(|symbols| {
@@ -105,14 +107,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn train_no_merges_returns_word_frequencies() {
+    fn train_no_merges_returns_empty() {
         let trainer = Trainer::new(0);
         let result = trainer.train(&vec!["banana banana nana", "banana"]);
 
-        let expected: HashMap<Vec<String>, usize> =
-            HashMap::from([(to_symbols("banana"), 3), (to_symbols("nana"), 1)]);
-
-        assert_eq!(result, expected);
+        assert!(result.is_empty());
     }
 
     #[test]
@@ -120,10 +119,7 @@ mod tests {
         let trainer = Trainer::new(2);
         let result = trainer.train(&vec!["banana banana nana", "banana"]);
 
-        let expected: HashMap<Vec<String>, usize> = HashMap::from([
-            (to_vec_symbols(&["b", "a", "nana", "<\\w>"]), 3),
-            (to_vec_symbols(&["nana", "<\\w>"]), 1),
-        ]);
+        let expected = to_merges(&[("n", "a"), ("na", "na")]);
 
         assert_eq!(result, expected);
     }
@@ -133,12 +129,22 @@ mod tests {
         let trainer = Trainer::new(10);
         let result = trainer.train(&vec!["banana banana nana", "banana"]);
 
-        let expected: HashMap<Vec<String>, usize> = HashMap::from([
-            (to_vec_symbols(&["banana<\\w>"]), 3),
-            (to_vec_symbols(&["nana<\\w>"]), 1),
+        let expected = to_merges(&[
+            ("n", "a"),
+            ("na", "na"),
+            ("nana", "</w>"),
+            ("b", "a"),
+            ("ba", "nana</w>"),
         ]);
 
         assert_eq!(result, expected);
+    }
+
+    fn to_merges(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+        pairs
+            .iter()
+            .map(|(a, b)| (a.to_string(), b.to_string()))
+            .collect()
     }
 
     #[test]
@@ -175,7 +181,7 @@ mod tests {
 
     fn to_symbols(word: &str) -> Vec<String> {
         let mut symbols: Vec<String> = word.chars().map(|c| c.to_string()).collect();
-        symbols.push("<\\w>".to_string());
+        symbols.push("</w>".to_string()); // <- changed
         symbols
     }
 
@@ -187,7 +193,7 @@ mod tests {
 
         let expected_result = HashMap::from([
             (to_pair_count(("a", "n"), 7)),
-            (to_pair_count(("a", "<\\w>"), 4)),
+            (to_pair_count(("a", "</w>"), 4)),
             (to_pair_count(("n", "a"), 8)),
             (to_pair_count(("b", "a"), 3)),
         ]);
@@ -249,8 +255,8 @@ mod tests {
         let result = Trainer::merge_pair(&word_freqs, &most_common_pair.unwrap());
 
         let expected_result = HashMap::from([
-            (to_vec_symbols(&["b", "a", "na", "na", "<\\w>"]), 3),
-            (to_vec_symbols(&["na", "na", "<\\w>"]), 1),
+            (to_vec_symbols(&["b", "a", "na", "na", "</w>"]), 3),
+            (to_vec_symbols(&["na", "na", "</w>"]), 1),
         ]);
 
         assert_eq!(result, expected_result);
@@ -268,13 +274,13 @@ mod tests {
 
         let expected_result = HashMap::from([
             (
-                to_vec_symbols(&["b", "a", "na", "na", "!", "!", "!", "<\\w>"]),
+                to_vec_symbols(&["b", "a", "na", "na", "!", "!", "!", "</w>"]),
                 1,
             ),
-            (to_vec_symbols(&[",", "!", "<\\w>"]), 1),
-            (to_vec_symbols(&["na", "na", "<\\w>"]), 1),
-            (to_vec_symbols(&[",", "<\\w>"]), 5),
-            (to_vec_symbols(&["b", "a", "na", "na", "<\\w>"]), 2),
+            (to_vec_symbols(&[",", "!", "</w>"]), 1),
+            (to_vec_symbols(&["na", "na", "</w>"]), 1),
+            (to_vec_symbols(&[",", "</w>"]), 5),
+            (to_vec_symbols(&["b", "a", "na", "na", "</w>"]), 2),
         ]);
 
         assert_eq!(result, expected_result);
