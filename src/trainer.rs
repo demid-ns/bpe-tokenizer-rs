@@ -1,3 +1,4 @@
+use crate::word_to_symbols;
 use std::collections::HashMap;
 
 pub struct Trainer {
@@ -33,11 +34,7 @@ impl Trainer {
         training_texts
             .iter()
             .flat_map(|text| text.split_whitespace())
-            .map(|word| {
-                let mut symbols: Vec<String> = word.chars().map(|c| c.to_string()).collect();
-                symbols.push("</w>".to_string());
-                symbols
-            })
+            .map(|word| word_to_symbols(word))
             .for_each(|symbols| {
                 *word_freqs.entry(symbols).or_insert(0) += 1;
             });
@@ -181,7 +178,7 @@ mod tests {
 
     fn to_symbols(word: &str) -> Vec<String> {
         let mut symbols: Vec<String> = word.chars().map(|c| c.to_string()).collect();
-        symbols.push("</w>".to_string()); // <- changed
+        symbols.push("</w>".to_string());
         symbols
     }
 
