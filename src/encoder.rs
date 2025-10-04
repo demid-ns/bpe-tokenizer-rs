@@ -12,7 +12,7 @@ impl Encoder {
     pub fn encode(&self, input: &str) -> Result<Vec<String>, String> {
         let tokens = Vec::new();
 
-        let _symbols = word_to_symbols(&input)?;
+        let _symbols = word_to_symbols(input)?;
 
         Ok(tokens)
     }
