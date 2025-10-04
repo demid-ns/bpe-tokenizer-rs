@@ -34,7 +34,7 @@ impl Trainer {
         training_texts
             .iter()
             .flat_map(|text| text.split_whitespace())
-            .map(|word| word_to_symbols(word))
+            .filter_map(|word| word_to_symbols(word).ok())
             .for_each(|symbols| {
                 *word_freqs.entry(symbols).or_insert(0) += 1;
             });

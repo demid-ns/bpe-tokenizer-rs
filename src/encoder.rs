@@ -9,12 +9,12 @@ impl Encoder {
         Self { merge_rules }
     }
 
-    pub fn encode(&self, input: &str) -> Vec<String> {
-        let mut tokens = Vec::new();
+    pub fn encode(&self, input: &str) -> Result<Vec<String>, String> {
+        let tokens = Vec::new();
 
-        let symbols = word_to_symbols(&input);
+        let _symbols = word_to_symbols(&input)?;
 
-        tokens
+        Ok(tokens)
     }
 }
 
