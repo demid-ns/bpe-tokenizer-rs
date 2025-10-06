@@ -1,7 +1,8 @@
 pub mod encoder;
-pub mod symbols;
+mod symbols;
+mod test_utils;
 pub mod trainer;
 
 pub use encoder::Encoder;
-pub use symbols::word_to_symbols;
+use symbols::word_to_symbols;
 pub use trainer::Trainer;

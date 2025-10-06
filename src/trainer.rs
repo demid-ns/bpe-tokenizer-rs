@@ -101,12 +101,14 @@ impl Trainer {
 
 #[cfg(test)]
 mod tests {
+    use crate::test_utils::to_merges;
+
     use super::*;
 
     #[test]
     fn train_no_merges_returns_empty() {
         let trainer = Trainer::new(0);
-        let result = trainer.train(&vec!["banana banana nana", "banana"]);
+        let result = trainer.train(&["banana banana nana", "banana"]);
 
         assert!(result.is_empty());
     }
@@ -114,7 +116,7 @@ mod tests {
     #[test]
     fn train_with_merges_applies_merges_correctly() {
         let trainer = Trainer::new(2);
-        let result = trainer.train(&vec!["banana banana nana", "banana"]);
+        let result = trainer.train(&["banana banana nana", "banana"]);
 
         let expected = to_merges(&[("n", "a"), ("na", "na")]);
 
@@ -124,7 +126,7 @@ mod tests {
     #[test]
     fn train_with_max_merges_merges_all_possible() {
         let trainer = Trainer::new(10);
-        let result = trainer.train(&vec!["banana banana nana", "banana"]);
+        let result = trainer.train(&["banana banana nana", "banana"]);
 
         let expected = to_merges(&[
             ("n", "a"),
@@ -137,16 +139,9 @@ mod tests {
         assert_eq!(result, expected);
     }
 
-    fn to_merges(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
-        pairs
-            .iter()
-            .map(|(a, b)| (a.to_string(), b.to_string()))
-            .collect()
-    }
-
     #[test]
     fn build_word_frequencies_two_texts() {
-        let result = Trainer::build_word_frequencies(&vec!["banana banana nana", "banana"]);
+        let result = Trainer::build_word_frequencies(&["banana banana nana", "banana"]);
 
         let expected: HashMap<Vec<String>, usize> =
             HashMap::from([(to_symbols("banana"), 3), (to_symbols("nana"), 1)]);
@@ -156,7 +151,7 @@ mod tests {
 
     #[test]
     fn build_word_frequencies_with_punctuation() {
-        let result = Trainer::build_word_frequencies(&vec!["banana ,! banana,", "banana"]);
+        let result = Trainer::build_word_frequencies(&["banana ,! banana,", "banana"]);
 
         let expected: HashMap<Vec<String>, usize> = HashMap::from([
             (to_symbols("banana"), 2),
@@ -169,7 +164,7 @@ mod tests {
 
     #[test]
     fn build_word_frequencies_empty_input() {
-        let result = Trainer::build_word_frequencies(&vec![]);
+        let result = Trainer::build_word_frequencies(&[]);
 
         let expected: HashMap<Vec<String>, usize> = HashMap::new();
 
@@ -184,7 +179,7 @@ mod tests {
 
     #[test]
     fn get_pair_frequencies_some_pairs() {
-        let word_freqs = Trainer::build_word_frequencies(&vec!["banana banana nana", "banana"]);
+        let word_freqs = Trainer::build_word_frequencies(&["banana banana nana", "banana"]);
 
         let pair_freqs = Trainer::get_pair_frequencies(&word_freqs);
 
@@ -200,7 +195,7 @@ mod tests {
 
     #[test]
     fn get_pair_frequencies_empty() {
-        let word_freqs = Trainer::build_word_frequencies(&vec![]);
+        let word_freqs = Trainer::build_word_frequencies(&[]);
 
         let pair_freqs = Trainer::get_pair_frequencies(&word_freqs);
 
@@ -215,7 +210,7 @@ mod tests {
 
     #[test]
     fn get_most_common_pair_some() {
-        let word_freqs = Trainer::build_word_frequencies(&vec!["banana banana nana", "banana"]);
+        let word_freqs = Trainer::build_word_frequencies(&["banana banana nana", "banana"]);
 
         let pair_freqs = Trainer::get_pair_frequencies(&word_freqs);
 
@@ -244,7 +239,7 @@ mod tests {
 
     #[test]
     fn merge_pair_some() {
-        let word_freqs = Trainer::build_word_frequencies(&vec!["banana banana nana", "banana"]);
+        let word_freqs = Trainer::build_word_frequencies(&["banana banana nana", "banana"]);
 
         let pair_freqs = Trainer::get_pair_frequencies(&word_freqs);
         let most_common_pair = Trainer::get_most_common_pair(&pair_freqs);
@@ -262,7 +257,7 @@ mod tests {
     #[test]
     fn merge_pair_with_punctuation() {
         let word_freqs =
-            Trainer::build_word_frequencies(&vec!["banana , , , , banana nana , ,!", "banana!!!"]);
+            Trainer::build_word_frequencies(&["banana , , , , banana nana , ,!", "banana!!!"]);
 
         let pair_freqs = Trainer::get_pair_frequencies(&word_freqs);
         let most_common_pair = Trainer::get_most_common_pair(&pair_freqs);
