@@ -3,6 +3,7 @@ pub mod encoder;
 mod symbols;
 mod test_utils;
 pub mod trainer;
+mod vocabulary;
 
 pub use byte_encoder::{bytes_to_unicode, unicode_to_bytes};
 pub use encoder::Encoder;
