@@ -52,3 +52,70 @@ impl Vocabulary {
         self.id_to_token.get(id).map(|s| s.as_str())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn vocabulary_base_tokens_correct() {
+        let vocab = Vocabulary::new(vec![]);
+
+        assert_eq!(vocab.token_to_id("A"), Some(65));
+        assert_eq!(vocab.id_to_token(65), Some("A"));
+
+        assert_eq!(vocab.token_to_id("Ā"), Some(0));
+        assert_eq!(vocab.id_to_token(0), Some("Ā"));
+
+        assert_eq!(vocab.token_to_id("Ġ"), Some(32));
+        assert_eq!(vocab.id_to_token(32), Some("Ġ"));
+    }
+
+    #[test]
+    fn vocabulary_with_merges() {
+        let merges = vec![
+            ("n".to_string(), "a".to_string()),
+            ("na".to_string(), "na".to_string()),
+        ];
+        let vocab = Vocabulary::new(merges);
+
+        assert_eq!(vocab.token_to_id("n"), Some(110));
+        assert_eq!(vocab.token_to_id("a"), Some(97));
+
+        assert_eq!(vocab.token_to_id("na"), Some(256));
+        assert_eq!(vocab.id_to_token(256), Some("na"));
+
+        assert_eq!(vocab.token_to_id("nana"), Some(257));
+        assert_eq!(vocab.id_to_token(257), Some("nana"));
+    }
+
+    #[test]
+    fn vocabulary_unknown_token() {
+        let vocab = Vocabulary::new(vec![]);
+
+        assert_eq!(vocab.token_to_id("unknown_token"), None);
+    }
+
+    #[test]
+    fn vocabulary_unknown_id() {
+        let vocab = Vocabulary::new(vec![]);
+
+        // ID beyond vocabulary size
+        assert_eq!(vocab.id_to_token(10000), None);
+    }
+
+    #[test]
+    fn vocabulary_round_trip() {
+        let merges = vec![
+            ("t".to_string(), "h".to_string()),
+            ("th".to_string(), "e".to_string()),
+        ];
+        let vocab = Vocabulary::new(merges);
+
+        // Test round-trip: token → id → token
+        let token = "the";
+        let id = vocab.token_to_id(token).unwrap();
+        let recovered_token = vocab.id_to_token(id).unwrap();
+        assert_eq!(token, recovered_token);
+    }
+}
