@@ -4,12 +4,20 @@ pub struct PreTokenizer {
     pub pattern: Regex,
 }
 
+impl Default for PreTokenizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PreTokenizer {
     pub fn new() -> Self {
         // GPT-2 regex pattern, simplified for Rust's regex crate (no lookahead support)
         // Matches: contractions, letters (with optional space), numbers (with optional space),
         // punctuation (with optional space), and remaining whitespace
-        let pattern = Regex::new(r"'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+").unwrap();
+        let pattern =
+            Regex::new(r"'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+")
+                .unwrap();
 
         PreTokenizer { pattern }
     }

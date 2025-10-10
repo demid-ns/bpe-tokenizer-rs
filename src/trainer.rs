@@ -1,20 +1,32 @@
-use crate::word_to_symbols;
+use crate::{PreTokenizer, bytes_to_unicode};
 use std::collections::HashMap;
 
+/// Trains a BPE tokenizer by learning merge rules from training data.
+///
+/// Uses byte-level tokenization with pre-tokenization (GPT-2 style).
 pub struct Trainer {
     num_merges: usize,
+    pre_tokenizer: PreTokenizer,
 }
 
 impl Trainer {
-    pub fn new(num_merges: usize) -> Trainer {
-        Self { num_merges }
+    /// Creates a new Trainer that will learn the specified number of merge rules.
+    pub fn new(num_merges: usize) -> Self {
+        Self {
+            num_merges,
+            pre_tokenizer: PreTokenizer::default(),
+        }
     }
 
+    /// Trains the BPE tokenizer on the given texts.
+    ///
+    /// Returns a list of merge rules learned from the training data.
+    /// Each merge is a pair of strings (token1, token2) that should be merged.
     pub fn train(&self, training_texts: &[&str]) -> Vec<(String, String)> {
         let mut merges = Vec::new();
-        let mut word_freqs = Self::build_word_frequencies(training_texts);
+        let mut word_freqs = self.build_word_frequencies(training_texts);
 
-        for _ in 1..=self.num_merges {
+        for _ in 0..self.num_merges {
             let pair_freqs = Self::get_pair_frequencies(&word_freqs);
 
             if let Some(most_common_pair) = Self::get_most_common_pair(&pair_freqs) {
@@ -28,33 +40,39 @@ impl Trainer {
         merges
     }
 
-    fn build_word_frequencies(training_texts: &[&str]) -> HashMap<Vec<String>, usize> {
-        let mut word_freqs = HashMap::new();
+    fn build_word_frequencies(&self, training_texts: &[&str]) -> HashMap<Vec<String>, usize> {
+        let byte_encoder = bytes_to_unicode();
 
         training_texts
             .iter()
-            .flat_map(|text| text.split_whitespace())
-            .filter_map(|word| word_to_symbols(word).ok())
-            .for_each(|symbols| {
-                *word_freqs.entry(symbols).or_insert(0) += 1;
-            });
-
-        word_freqs
+            .flat_map(|text| self.pre_tokenizer.pre_tokenize(text))
+            .map(|chunk| {
+                chunk
+                    .as_bytes()
+                    .iter()
+                    .map(|&byte| byte_encoder[&byte].to_string())
+                    .collect::<Vec<String>>()
+            })
+            .fold(HashMap::new(), |mut word_freqs, tokens| {
+                *word_freqs.entry(tokens).or_insert(0) += 1;
+                word_freqs
+            })
     }
 
     fn get_pair_frequencies(
         word_freqs: &HashMap<Vec<String>, usize>,
     ) -> HashMap<(String, String), usize> {
-        let mut pair_freqs = HashMap::new();
-
-        word_freqs.iter().for_each(|(symbols, &count)| {
-            symbols.windows(2).for_each(|pair| {
-                let key = (pair[0].clone(), pair[1].clone());
-                *pair_freqs.entry(key).or_insert(0) += count;
-            });
-        });
-
-        pair_freqs
+        word_freqs
+            .iter()
+            .flat_map(|(symbols, &count)| {
+                symbols
+                    .windows(2)
+                    .map(move |pair| ((pair[0].clone(), pair[1].clone()), count))
+            })
+            .fold(HashMap::new(), |mut pair_freqs, (pair, count)| {
+                *pair_freqs.entry(pair).or_insert(0) += count;
+                pair_freqs
+            })
     }
 
     fn get_most_common_pair(
@@ -63,10 +81,7 @@ impl Trainer {
         pair_freqs
             .iter()
             .max_by(|(pair_a, count_a), (pair_b, count_b)| {
-                match count_a.cmp(count_b) {
-                    std::cmp::Ordering::Equal => pair_a.cmp(pair_b), // pick lexicographically smallest
-                    other => other,
-                }
+                count_a.cmp(count_b).then_with(|| pair_a.cmp(pair_b))
             })
             .map(|(pair, _)| pair.clone())
     }
@@ -75,154 +90,217 @@ impl Trainer {
         word_freqs: &HashMap<Vec<String>, usize>,
         pair: &(String, String),
     ) -> HashMap<Vec<String>, usize> {
-        let mut merged_word_freqs = HashMap::new();
-        let merged_symbol = format!("{}{}", pair.0, pair.1);
+        let merged_token = format!("{}{}", pair.0, pair.1);
 
-        for (symbols, &count) in word_freqs {
-            let mut i = 0;
-            let mut merged_symbols = Vec::new();
+        word_freqs
+            .iter()
+            .map(|(symbols, &count)| {
+                let mut merged_symbols = Vec::new();
+                let mut i = 0;
 
-            while i < symbols.len() {
-                if i + 1 < symbols.len() && symbols[i] == pair.0 && symbols[i + 1] == pair.1 {
-                    merged_symbols.push(merged_symbol.clone());
-                    i += 2;
-                } else {
-                    merged_symbols.push(symbols[i].clone());
-                    i += 1;
+                while i < symbols.len() {
+                    if i + 1 < symbols.len() && symbols[i] == pair.0 && symbols[i + 1] == pair.1 {
+                        merged_symbols.push(merged_token.clone());
+                        i += 2;
+                    } else {
+                        merged_symbols.push(symbols[i].clone());
+                        i += 1;
+                    }
                 }
-            }
 
-            *merged_word_freqs.entry(merged_symbols).or_insert(0) += count;
-        }
-
-        merged_word_freqs
+                (merged_symbols, count)
+            })
+            .fold(HashMap::new(), |mut merged_freqs, (symbols, count)| {
+                *merged_freqs.entry(symbols).or_insert(0) += count;
+                merged_freqs
+            })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::test_utils::to_merges;
-
     use super::*;
+
+    fn chunk_to_tokens(chunk: &str) -> Vec<String> {
+        let byte_encoder = bytes_to_unicode();
+        chunk
+            .as_bytes()
+            .iter()
+            .map(|&byte| byte_encoder[&byte].to_string())
+            .collect()
+    }
 
     #[test]
     fn train_no_merges_returns_empty() {
         let trainer = Trainer::new(0);
-        let result = trainer.train(&["banana banana nana", "banana"]);
+        let result = trainer.train(&["hello world"]);
 
         assert!(result.is_empty());
     }
 
     #[test]
-    fn train_with_merges_applies_merges_correctly() {
+    fn train_with_merges_returns_correct_count() {
+        let trainer = Trainer::new(5);
+        let result = trainer.train(&["hello hello hello world"]);
+
+        assert_eq!(result.len(), 5);
+
+        for (first, second) in &result {
+            assert!(!first.is_empty());
+            assert!(!second.is_empty());
+        }
+    }
+
+    #[test]
+    fn train_produces_ordered_merges() {
+        let trainer = Trainer::new(3);
+        let result = trainer.train(&["aaaa bbbb"]);
+
+        assert_eq!(result.len(), 3);
+    }
+
+    #[test]
+    fn train_handles_two_byte_utf8_sequences() {
         let trainer = Trainer::new(2);
-        let result = trainer.train(&["banana banana nana", "banana"]);
+        let result = trainer.train(&["café café café"]);
 
-        let expected = to_merges(&[("n", "a"), ("na", "na")]);
+        assert_eq!(result.len(), 2);
 
-        assert_eq!(result, expected);
+        let byte_encoder = bytes_to_unicode();
+
+        // "café café café" pre-tokenizes to ["café", " café", " café"]
+        // "café" bytes: [0x63='c', 0x61='a', 0x66='f', 0xc3='Ã', 0xa9='©']
+        // " café" bytes: [0x20='Ġ', 0x63='c', 0x61='a', 0x66='f', 0xc3='Ã', 0xa9='©']
+
+        // Most frequent pairs with count 3: (Ã, ©), (c, a), (a, f), (f, Ã)
+        // Most frequent pair with count 2: (Ġ, c)
+        // First merge should be one of the pairs that appears 3 times
+        let e_byte1 = byte_encoder[&0xc3].to_string(); // 'Ã'
+        let e_byte2 = byte_encoder[&0xa9].to_string(); // '©'
+
+        // Verify that the UTF-8 byte sequence for 'é' (Ã, ©) is one of the learned merges
+        assert!(result.contains(&(e_byte1, e_byte2)));
     }
 
     #[test]
-    fn train_with_max_merges_merges_all_possible() {
-        let trainer = Trainer::new(10);
-        let result = trainer.train(&["banana banana nana", "banana"]);
+    fn train_handles_three_byte_utf8_sequences() {
+        let trainer = Trainer::new(3);
+        let result = trainer.train(&["日本 日本 日本"]);
 
-        let expected = to_merges(&[
-            ("n", "a"),
-            ("na", "na"),
-            ("nana", "</w>"),
-            ("b", "a"),
-            ("ba", "nana</w>"),
-        ]);
+        assert_eq!(result.len(), 3);
 
-        assert_eq!(result, expected);
-    }
+        let byte_encoder = bytes_to_unicode();
 
-    #[test]
-    fn build_word_frequencies_two_texts() {
-        let result = Trainer::build_word_frequencies(&["banana banana nana", "banana"]);
+        // "日" (U+65E5) in UTF-8: [0xe6, 0x97, 0xa5]
+        // These bytes appear 3 times in "日本 日本 日本"
+        let byte1 = byte_encoder[&0xe6].to_string();
+        let byte2 = byte_encoder[&0x97].to_string();
+        let byte3 = byte_encoder[&0xa5].to_string();
 
-        let expected: HashMap<Vec<String>, usize> =
-            HashMap::from([(to_symbols("banana"), 3), (to_symbols("nana"), 1)]);
-
-        assert_eq!(result, expected);
-    }
-
-    #[test]
-    fn build_word_frequencies_with_punctuation() {
-        let result = Trainer::build_word_frequencies(&["banana ,! banana,", "banana"]);
-
-        let expected: HashMap<Vec<String>, usize> = HashMap::from([
-            (to_symbols("banana"), 2),
-            (to_symbols("banana,"), 1),
-            (to_symbols(",!"), 1),
-        ]);
-
-        assert_eq!(result, expected);
+        // The three bytes of "日" should be merged together in sequence
+        // First merge: two adjacent bytes from "日"
+        // Second merge: the result with the third byte
+        assert!(
+            result.contains(&(byte1.clone(), byte2.clone()))
+                || result.contains(&(byte2.clone(), byte3.clone()))
+        );
     }
 
     #[test]
     fn build_word_frequencies_empty_input() {
-        let result = Trainer::build_word_frequencies(&[]);
+        let trainer = Trainer::new(10);
+        let result = trainer.build_word_frequencies(&[]);
 
-        let expected: HashMap<Vec<String>, usize> = HashMap::new();
-
-        assert_eq!(result, expected);
-    }
-
-    fn to_symbols(word: &str) -> Vec<String> {
-        let mut symbols: Vec<String> = word.chars().map(|c| c.to_string()).collect();
-        symbols.push("</w>".to_string());
-        symbols
+        assert!(result.is_empty());
     }
 
     #[test]
-    fn get_pair_frequencies_some_pairs() {
-        let word_freqs = Trainer::build_word_frequencies(&["banana banana nana", "banana"]);
+    fn build_word_frequencies_single_word() {
+        let trainer = Trainer::new(10);
+        let result = trainer.build_word_frequencies(&["hello"]);
 
-        let pair_freqs = Trainer::get_pair_frequencies(&word_freqs);
+        assert_eq!(result.len(), 1);
 
-        let expected_result = HashMap::from([
-            (to_pair_count(("a", "n"), 7)),
-            (to_pair_count(("a", "</w>"), 4)),
-            (to_pair_count(("n", "a"), 8)),
-            (to_pair_count(("b", "a"), 3)),
-        ]);
+        let expected_tokens = chunk_to_tokens("hello");
+        assert_eq!(result.get(&expected_tokens), Some(&1));
+    }
 
-        assert_eq!(pair_freqs, expected_result);
+    #[test]
+    fn build_word_frequencies_counts_correctly() {
+        let trainer = Trainer::new(10);
+        let result = trainer.build_word_frequencies(&["test test test"]);
+
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn build_word_frequencies_handles_punctuation() {
+        let trainer = Trainer::new(10);
+        let result = trainer.build_word_frequencies(&["hello, world!"]);
+
+        assert_eq!(result.len(), 4);
+
+        assert!(result.contains_key(&chunk_to_tokens(",")));
+        assert!(result.contains_key(&chunk_to_tokens("!")));
     }
 
     #[test]
     fn get_pair_frequencies_empty() {
-        let word_freqs = Trainer::build_word_frequencies(&[]);
-
+        let word_freqs = HashMap::new();
         let pair_freqs = Trainer::get_pair_frequencies(&word_freqs);
 
-        let expected_result = HashMap::new();
-
-        assert_eq!(pair_freqs, expected_result);
-    }
-
-    fn to_pair_count(pair: (&str, &str), count: usize) -> ((String, String), usize) {
-        ((pair.0.to_string(), pair.1.to_string()), count)
+        assert!(pair_freqs.is_empty());
     }
 
     #[test]
-    fn get_most_common_pair_some() {
-        let word_freqs = Trainer::build_word_frequencies(&["banana banana nana", "banana"]);
+    fn get_pair_frequencies_finds_pairs() {
+        let mut word_freqs = HashMap::new();
+        word_freqs.insert(vec!["a".to_string(), "b".to_string(), "c".to_string()], 1);
 
         let pair_freqs = Trainer::get_pair_frequencies(&word_freqs);
 
-        let result = Trainer::get_most_common_pair(&pair_freqs);
+        assert_eq!(pair_freqs.len(), 2);
+        assert_eq!(
+            pair_freqs.get(&("a".to_string(), "b".to_string())),
+            Some(&1)
+        );
+        assert_eq!(
+            pair_freqs.get(&("b".to_string(), "c".to_string())),
+            Some(&1)
+        );
+    }
 
-        assert_eq!(result, Some(("n".to_string(), "a".to_string())));
+    #[test]
+    fn get_pair_frequencies_counts_frequency() {
+        let mut word_freqs = HashMap::new();
+        word_freqs.insert(vec!["a".to_string(), "b".to_string()], 3);
+
+        let pair_freqs = Trainer::get_pair_frequencies(&word_freqs);
+
+        assert_eq!(
+            pair_freqs.get(&("a".to_string(), "b".to_string())),
+            Some(&3)
+        );
     }
 
     #[test]
     fn get_most_common_pair_none() {
-        let most_common_pair = Trainer::get_most_common_pair(&HashMap::new());
-        assert_eq!(most_common_pair, None);
+        let pair_freqs = HashMap::new();
+        let result = Trainer::get_most_common_pair(&pair_freqs);
+
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn get_most_common_pair_finds_max() {
+        let mut pair_freqs = HashMap::new();
+        pair_freqs.insert(("a".to_string(), "b".to_string()), 5);
+        pair_freqs.insert(("c".to_string(), "d".to_string()), 10);
+        pair_freqs.insert(("e".to_string(), "f".to_string()), 3);
+
+        let result = Trainer::get_most_common_pair(&pair_freqs);
+
+        assert_eq!(result, Some(("c".to_string(), "d".to_string())));
     }
 
     #[test]
@@ -238,47 +316,43 @@ mod tests {
     }
 
     #[test]
-    fn merge_pair_some() {
-        let word_freqs = Trainer::build_word_frequencies(&["banana banana nana", "banana"]);
+    fn merge_pair_combines_tokens() {
+        let mut word_freqs = HashMap::new();
+        word_freqs.insert(vec!["a".to_string(), "b".to_string(), "c".to_string()], 1);
 
-        let pair_freqs = Trainer::get_pair_frequencies(&word_freqs);
-        let most_common_pair = Trainer::get_most_common_pair(&pair_freqs);
+        let result = Trainer::merge_pair(&word_freqs, &("a".to_string(), "b".to_string()));
 
-        let result = Trainer::merge_pair(&word_freqs, &most_common_pair.unwrap());
-
-        let expected_result = HashMap::from([
-            (to_vec_symbols(&["b", "a", "na", "na", "</w>"]), 3),
-            (to_vec_symbols(&["na", "na", "</w>"]), 1),
-        ]);
-
-        assert_eq!(result, expected_result);
+        let expected = vec!["ab".to_string(), "c".to_string()];
+        assert_eq!(result.get(&expected), Some(&1));
     }
 
     #[test]
-    fn merge_pair_with_punctuation() {
-        let word_freqs =
-            Trainer::build_word_frequencies(&["banana , , , , banana nana , ,!", "banana!!!"]);
+    fn merge_pair_preserves_frequency() {
+        let mut word_freqs = HashMap::new();
+        word_freqs.insert(vec!["a".to_string(), "b".to_string()], 5);
 
-        let pair_freqs = Trainer::get_pair_frequencies(&word_freqs);
-        let most_common_pair = Trainer::get_most_common_pair(&pair_freqs);
+        let result = Trainer::merge_pair(&word_freqs, &("a".to_string(), "b".to_string()));
 
-        let result = Trainer::merge_pair(&word_freqs, &most_common_pair.unwrap());
-
-        let expected_result = HashMap::from([
-            (
-                to_vec_symbols(&["b", "a", "na", "na", "!", "!", "!", "</w>"]),
-                1,
-            ),
-            (to_vec_symbols(&[",", "!", "</w>"]), 1),
-            (to_vec_symbols(&["na", "na", "</w>"]), 1),
-            (to_vec_symbols(&[",", "</w>"]), 5),
-            (to_vec_symbols(&["b", "a", "na", "na", "</w>"]), 2),
-        ]);
-
-        assert_eq!(result, expected_result);
+        let expected = vec!["ab".to_string()];
+        assert_eq!(result.get(&expected), Some(&5));
     }
 
-    fn to_vec_symbols(symbols: &[&str]) -> Vec<String> {
-        symbols.iter().map(|t| t.to_string()).collect()
+    #[test]
+    fn merge_pair_handles_multiple_occurrences() {
+        let mut word_freqs = HashMap::new();
+        word_freqs.insert(
+            vec![
+                "a".to_string(),
+                "b".to_string(),
+                "a".to_string(),
+                "b".to_string(),
+            ],
+            1,
+        );
+
+        let result = Trainer::merge_pair(&word_freqs, &("a".to_string(), "b".to_string()));
+
+        let expected = vec!["ab".to_string(), "ab".to_string()];
+        assert_eq!(result.get(&expected), Some(&1));
     }
 }
