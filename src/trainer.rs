@@ -81,6 +81,7 @@ impl Trainer {
         pair_freqs
             .iter()
             .max_by(|(pair_a, count_a), (pair_b, count_b)| {
+                // Match HuggingFace tokenizers: sort by count first, then lexicographically
                 count_a.cmp(count_b).then_with(|| pair_a.cmp(pair_b))
             })
             .map(|(pair, _)| pair.clone())
@@ -312,6 +313,8 @@ mod tests {
 
         let result = Trainer::get_most_common_pair(&pair_freqs);
 
+        // With equal frequencies, should pick lexicographically largest: ("z", "a")
+        // This matches HuggingFace tokenizers behavior
         assert_eq!(result, Some(("z".to_string(), "a".to_string())));
     }
 
