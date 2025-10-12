@@ -1,18 +1,43 @@
-use crate::word_to_symbols;
+use crate::{PreTokenizer, Vocabulary, bytes_to_unicode};
 
 pub struct Encoder {
     merge_rules: Vec<(String, String)>,
+    pre_tokenizer: PreTokenizer,
+    vocabulary: Vocabulary,
 }
 
 impl Encoder {
-    pub fn new(merge_rules: Vec<(String, String)>) -> Self {
-        Encoder { merge_rules }
+    pub fn new(
+        merge_rules: Vec<(String, String)>,
+        pre_tokenizer: PreTokenizer,
+        vocabulary: Vocabulary,
+    ) -> Self {
+        Encoder {
+            merge_rules,
+            pre_tokenizer,
+            vocabulary,
+        }
     }
 
-    pub fn encode(&self, text: &str) -> Vec<Vec<String>> {
-        text.split_whitespace()
-            .filter_map(|word| word_to_symbols(word).ok())
-            .map(|symbols| self.apply_merge_rules(symbols))
+    pub fn encode(&self, text: &str) -> Vec<usize> {
+        let byte_encoder = bytes_to_unicode();
+
+        self.pre_tokenizer
+            .pre_tokenize(text)
+            .iter()
+            .flat_map(|chunk| {
+                let unicode_symbols: Vec<String> = chunk
+                    .as_bytes()
+                    .iter()
+                    .map(|&byte| byte_encoder[&byte].to_string())
+                    .collect();
+
+                let merged_tokens = self.apply_merge_rules(unicode_symbols);
+
+                merged_tokens
+                    .into_iter()
+                    .map(|token| self.token_to_id(&token))
+            })
             .collect()
     }
 
@@ -60,29 +85,10 @@ impl Encoder {
 
         None
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use crate::test_utils::to_merges;
-
-    use super::*;
-
-    #[test]
-    fn encode_correctly_applies_merge_rules() {
-        let merge_rules = to_merges(&[
-            ("n", "a"),
-            ("na", "na"),
-            ("nana", "</w>"),
-            ("b", "a"),
-            ("ba", "nana</w>"),
-        ]);
-
-        let encoder = Encoder::new(merge_rules);
-        let result = encoder.encode("banana nanao");
-
-        let expected = vec![vec!["banana</w>"], vec!["nana", "o", "</w>"]];
-
-        assert_eq!(result, expected);
+    fn token_to_id(&self, token: &str) -> usize {
+        self.vocabulary
+            .token_to_id(token)
+            .unwrap_or_else(|| panic!("Token '{}' not in vocabulary. This indicates vocabulary and merge rules are out of sync!", token))
     }
 }
