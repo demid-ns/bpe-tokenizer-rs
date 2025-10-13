@@ -8,10 +8,10 @@ use crate::bytes_to_unicode;
 /// - `token_to_id`: HashMap for fast token → ID lookup (used during encoding)
 /// - `id_to_token`: Vec for fast ID → token lookup (used during decoding)
 ///
-/// We use Vec instead of HashMap<usize, String> for `id_to_token` because IDs are
+/// We use Vec instead of HashMap<u32, String> for `id_to_token` because IDs are
 /// sequential (0, 1, 2, ...), making Vec index access more efficient than hash lookup.
 pub struct Vocabulary {
-    token_to_id: HashMap<String, usize>,
+    token_to_id: HashMap<String, u32>,
     id_to_token: Vec<String>,
 }
 
@@ -27,12 +27,12 @@ impl Vocabulary {
             let token = ch.to_string();
 
             id_to_token.push(token.clone());
-            token_to_id.insert(token, byte as usize);
+            token_to_id.insert(token, byte as u32);
         }
 
         for (part1, part2) in merges {
             let token = format!("{}{}", part1, part2);
-            let id = id_to_token.len();
+            let id = id_to_token.len() as u32;
 
             id_to_token.push(token.clone());
             token_to_id.insert(token, id);
@@ -44,12 +44,12 @@ impl Vocabulary {
         }
     }
 
-    pub fn token_to_id(&self, token: &str) -> Option<usize> {
+    pub fn token_to_id(&self, token: &str) -> Option<u32> {
         self.token_to_id.get(token).copied()
     }
 
-    pub fn id_to_token(&self, id: usize) -> Option<&str> {
-        self.id_to_token.get(id).map(|s| s.as_str())
+    pub fn id_to_token(&self, id: u32) -> Option<&str> {
+        self.id_to_token.get(id as usize).map(|s| s.as_str())
     }
 }
 
