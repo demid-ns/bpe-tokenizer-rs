@@ -41,6 +41,13 @@ impl Encoder {
             .collect()
     }
 
+    /// Returns a reference to the vocabulary used by this encoder.
+    ///
+    /// This is useful for decoding token IDs back to text.
+    pub fn vocabulary(&self) -> &Vocabulary {
+        &self.vocabulary
+    }
+
     fn apply_merge_rules(&self, mut symbols: Vec<String>) -> Vec<String> {
         while let Some((rule_idx, positions)) = self.find_best_pair(&symbols) {
             let (first, second) = &self.merge_rules[rule_idx];
