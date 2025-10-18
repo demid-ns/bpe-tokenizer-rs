@@ -109,7 +109,7 @@ mod tests {
     fn encode_empty_text() {
         let trainer = Trainer::new(5);
         let merges = trainer.train(&["test"]);
-        let vocab = Vocabulary::new(merges.clone());
+        let vocab = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
         let encoder = Encoder::new(merges, pre_tokenizer, vocab);
 
@@ -122,7 +122,7 @@ mod tests {
     fn encode_single_ascii_char() {
         let trainer = Trainer::new(0);
         let merges = trainer.train(&[""]);
-        let vocab = Vocabulary::new(merges.clone());
+        let vocab = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
         let encoder = Encoder::new(merges, pre_tokenizer, vocab);
 
@@ -135,7 +135,7 @@ mod tests {
     fn encode_two_ascii_chars() {
         let trainer = Trainer::new(0);
         let merges = trainer.train(&[""]);
-        let vocab = Vocabulary::new(merges.clone());
+        let vocab = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
         let encoder = Encoder::new(merges, pre_tokenizer, vocab);
 
@@ -148,7 +148,7 @@ mod tests {
     fn encode_with_punctuation_split() {
         let trainer = Trainer::new(0);
         let merges = trainer.train(&[""]);
-        let vocab = Vocabulary::new(merges.clone());
+        let vocab = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
         let encoder = Encoder::new(merges, pre_tokenizer, vocab);
 
@@ -161,7 +161,7 @@ mod tests {
     fn encode_utf8_two_bytes() {
         let trainer = Trainer::new(0);
         let merges = trainer.train(&[""]);
-        let vocab = Vocabulary::new(merges.clone());
+        let vocab = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
         let encoder = Encoder::new(merges, pre_tokenizer, vocab);
 
@@ -174,7 +174,7 @@ mod tests {
     fn encode_with_leading_space() {
         let trainer = Trainer::new(0);
         let merges = trainer.train(&[""]);
-        let vocab = Vocabulary::new(merges.clone());
+        let vocab = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
         let encoder = Encoder::new(merges, pre_tokenizer, vocab);
 
@@ -187,7 +187,7 @@ mod tests {
     fn encode_applies_single_merge() {
         let trainer = Trainer::new(1);
         let merges = trainer.train(&["aa aa aa"]);
-        let vocab = Vocabulary::new(merges.clone());
+        let vocab = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
         let encoder = Encoder::new(merges, pre_tokenizer, vocab);
 
@@ -201,7 +201,7 @@ mod tests {
     fn encode_with_learned_merge() {
         let trainer = Trainer::new(1);
         let merges = trainer.train(&["ab ab ab"]);
-        let vocab = Vocabulary::new(merges.clone());
+        let vocab = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
         let encoder = Encoder::new(merges, pre_tokenizer, vocab);
 
@@ -214,7 +214,7 @@ mod tests {
     fn encode_japanese_characters() {
         let trainer = Trainer::new(0);
         let merges = trainer.train(&[""]);
-        let vocab = Vocabulary::new(merges.clone());
+        let vocab = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
         let encoder = Encoder::new(merges, pre_tokenizer, vocab);
 
@@ -227,7 +227,7 @@ mod tests {
     fn encode_russian_text() {
         let trainer = Trainer::new(0);
         let merges = trainer.train(&[""]);
-        let vocab = Vocabulary::new(merges.clone());
+        let vocab = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
         let encoder = Encoder::new(merges, pre_tokenizer, vocab);
 
@@ -245,7 +245,7 @@ mod tests {
     fn encode_mixed_languages() {
         let trainer = Trainer::new(0);
         let merges = trainer.train(&[""]);
-        let vocab = Vocabulary::new(merges.clone());
+        let vocab = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
         let encoder = Encoder::new(merges, pre_tokenizer, vocab);
 
@@ -267,7 +267,7 @@ mod tests {
     fn encode_emoji() {
         let trainer = Trainer::new(0);
         let merges = trainer.train(&[""]);
-        let vocab = Vocabulary::new(merges.clone());
+        let vocab = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
         let encoder = Encoder::new(merges, pre_tokenizer, vocab);
 
@@ -281,7 +281,7 @@ mod tests {
         // Merge: (159, 209) -> 256, where 159 and 209 are UTF-8 bytes from "Привет"
         let trainer = Trainer::new(1);
         let merges = trainer.train(&["Привет Привет Привет"]);
-        let vocab = Vocabulary::new(merges.clone());
+        let vocab = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
         let encoder = Encoder::new(merges, pre_tokenizer, vocab);
 
@@ -298,7 +298,7 @@ mod tests {
         // Merge: (151, 165) -> 256, where 151 and 165 are UTF-8 bytes from "世界"
         let trainer = Trainer::new(1);
         let merges = trainer.train(&["世界 世界 世界"]);
-        let vocab = Vocabulary::new(merges.clone());
+        let vocab = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
         let encoder = Encoder::new(merges, pre_tokenizer, vocab);
 
