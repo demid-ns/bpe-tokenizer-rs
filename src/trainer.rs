@@ -358,4 +358,31 @@ mod tests {
         let expected = vec!["ab".to_string(), "ab".to_string()];
         assert_eq!(result.get(&expected), Some(&1));
     }
+
+    #[test]
+    fn train_produces_same_merges_regardless_of_special_tokens() {
+        use crate::Vocabulary;
+
+        let trainer = Trainer::new(5);
+        let merges = trainer.train(&["hello world hello world hello world"]);
+
+        let vocab_without_special = Vocabulary::new(vec![], merges.clone());
+
+        let special_tokens = vec!["<|endoftext|>".to_string(), "[PAD]".to_string()];
+        let vocab_with_special = Vocabulary::new(special_tokens.clone(), merges.clone());
+
+        assert_eq!(merges.len(), 5);
+
+        let first_merge = format!("{}{}", merges[0].0, merges[0].1);
+
+        assert_eq!(vocab_without_special.token_to_id(&first_merge), Some(256));
+
+        assert_eq!(vocab_with_special.token_to_id(&first_merge), Some(258));
+
+        assert_eq!(vocab_without_special.token_to_id("<|endoftext|>"), None);
+        assert_eq!(vocab_with_special.token_to_id("<|endoftext|>"), Some(0));
+
+        assert_eq!(vocab_without_special.token_to_id("[PAD]"), None);
+        assert_eq!(vocab_with_special.token_to_id("[PAD]"), Some(1));
+    }
 }
