@@ -1,9 +1,12 @@
+use std::collections::HashMap;
+
 use crate::{PreTokenizer, Vocabulary, bytes_to_unicode};
 
 pub struct Encoder {
     merge_rules: Vec<(String, String)>,
     pre_tokenizer: PreTokenizer,
     vocabulary: Vocabulary,
+    special_tokens: Vec<String>,
 }
 
 impl Encoder {
@@ -11,22 +14,38 @@ impl Encoder {
         merge_rules: Vec<(String, String)>,
         pre_tokenizer: PreTokenizer,
         vocabulary: Vocabulary,
+        special_tokens: Vec<String>,
     ) -> Self {
         Encoder {
             merge_rules,
             pre_tokenizer,
             vocabulary,
+            special_tokens,
         }
     }
 
     pub fn encode(&self, text: &str) -> Vec<u32> {
         let byte_encoder = bytes_to_unicode();
+        let chunks = self.split_on_special_tokens(text);
 
+        chunks
+            .into_iter()
+            .flat_map(|(chunk_text, is_special)| {
+                if is_special {
+                    vec![self.token_to_id(&chunk_text)]
+                } else {
+                    self.encode_regular_text(&byte_encoder, &chunk_text)
+                }
+            })
+            .collect()
+    }
+
+    fn encode_regular_text(&self, byte_encoder: &HashMap<u8, char>, text: &str) -> Vec<u32> {
         self.pre_tokenizer
             .pre_tokenize(text)
             .iter()
-            .flat_map(|chunk| {
-                let unicode_symbols: Vec<String> = chunk
+            .flat_map(|word| {
+                let unicode_symbols: Vec<String> = word
                     .as_bytes()
                     .iter()
                     .map(|&byte| byte_encoder[&byte].to_string())
@@ -39,6 +58,46 @@ impl Encoder {
                     .map(|token| self.token_to_id(&token))
             })
             .collect()
+    }
+
+    fn split_on_special_tokens(&self, text: &str) -> Vec<(String, bool)> {
+        if self.special_tokens.is_empty() {
+            return vec![(text.to_string(), false)];
+        }
+
+        let mut chunks = vec![(text.to_string(), false)];
+
+        for special_token in &self.special_tokens {
+            chunks = chunks
+                .into_iter()
+                .flat_map(|(chunk_text, is_special)| {
+                    if is_special {
+                        vec![(chunk_text, true)]
+                    } else {
+                        self.split_chunk_on_token(&chunk_text, special_token)
+                    }
+                })
+                .collect();
+        }
+
+        chunks
+    }
+
+    fn split_chunk_on_token(&self, text: &str, special_token: &str) -> Vec<(String, bool)> {
+        let parts: Vec<&str> = text.split(special_token).collect();
+        let mut result = Vec::new();
+
+        for (i, part) in parts.iter().enumerate() {
+            if !part.is_empty() {
+                result.push((part.to_string(), false));
+            }
+
+            if i < parts.len() - 1 {
+                result.push((special_token.to_string(), true));
+            }
+        }
+
+        result
     }
 
     /// Returns a reference to the vocabulary used by this encoder.
@@ -111,7 +170,7 @@ mod tests {
         let merges = trainer.train(&["test"]);
         let vocab = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
-        let encoder = Encoder::new(merges, pre_tokenizer, vocab);
+        let encoder = Encoder::new(merges, pre_tokenizer, vocab, vec![]);
 
         let ids = encoder.encode("");
 
@@ -124,7 +183,7 @@ mod tests {
         let merges = trainer.train(&[""]);
         let vocab = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
-        let encoder = Encoder::new(merges, pre_tokenizer, vocab);
+        let encoder = Encoder::new(merges, pre_tokenizer, vocab, vec![]);
 
         let ids = encoder.encode("A");
 
@@ -137,7 +196,7 @@ mod tests {
         let merges = trainer.train(&[""]);
         let vocab = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
-        let encoder = Encoder::new(merges, pre_tokenizer, vocab);
+        let encoder = Encoder::new(merges, pre_tokenizer, vocab, vec![]);
 
         let ids = encoder.encode("AB");
 
@@ -150,7 +209,7 @@ mod tests {
         let merges = trainer.train(&[""]);
         let vocab = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
-        let encoder = Encoder::new(merges, pre_tokenizer, vocab);
+        let encoder = Encoder::new(merges, pre_tokenizer, vocab, vec![]);
 
         let ids = encoder.encode("A,B");
 
@@ -163,7 +222,7 @@ mod tests {
         let merges = trainer.train(&[""]);
         let vocab = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
-        let encoder = Encoder::new(merges, pre_tokenizer, vocab);
+        let encoder = Encoder::new(merges, pre_tokenizer, vocab, vec![]);
 
         let ids = encoder.encode("é");
 
@@ -176,7 +235,7 @@ mod tests {
         let merges = trainer.train(&[""]);
         let vocab = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
-        let encoder = Encoder::new(merges, pre_tokenizer, vocab);
+        let encoder = Encoder::new(merges, pre_tokenizer, vocab, vec![]);
 
         let ids = encoder.encode(" A");
 
@@ -189,7 +248,7 @@ mod tests {
         let merges = trainer.train(&["aa aa aa"]);
         let vocab = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
-        let encoder = Encoder::new(merges, pre_tokenizer, vocab);
+        let encoder = Encoder::new(merges, pre_tokenizer, vocab, vec![]);
 
         let ids = encoder.encode("aa");
 
@@ -203,7 +262,7 @@ mod tests {
         let merges = trainer.train(&["ab ab ab"]);
         let vocab = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
-        let encoder = Encoder::new(merges, pre_tokenizer, vocab);
+        let encoder = Encoder::new(merges, pre_tokenizer, vocab, vec![]);
 
         let ids = encoder.encode("ab");
 
@@ -216,7 +275,7 @@ mod tests {
         let merges = trainer.train(&[""]);
         let vocab = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
-        let encoder = Encoder::new(merges, pre_tokenizer, vocab);
+        let encoder = Encoder::new(merges, pre_tokenizer, vocab, vec![]);
 
         let ids = encoder.encode("日");
 
@@ -229,7 +288,7 @@ mod tests {
         let merges = trainer.train(&[""]);
         let vocab = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
-        let encoder = Encoder::new(merges, pre_tokenizer, vocab);
+        let encoder = Encoder::new(merges, pre_tokenizer, vocab, vec![]);
 
         let ids = encoder.encode("Привет");
 
@@ -247,7 +306,7 @@ mod tests {
         let merges = trainer.train(&[""]);
         let vocab = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
-        let encoder = Encoder::new(merges, pre_tokenizer, vocab);
+        let encoder = Encoder::new(merges, pre_tokenizer, vocab, vec![]);
 
         let ids_hello = encoder.encode("Hello");
         let ids_chinese = encoder.encode("世界");
@@ -269,7 +328,7 @@ mod tests {
         let merges = trainer.train(&[""]);
         let vocab = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
-        let encoder = Encoder::new(merges, pre_tokenizer, vocab);
+        let encoder = Encoder::new(merges, pre_tokenizer, vocab, vec![]);
 
         let ids = encoder.encode("🦀");
 
@@ -278,12 +337,11 @@ mod tests {
 
     #[test]
     fn encode_russian_with_single_merge() {
-        // Merge: (159, 209) -> 256, where 159 and 209 are UTF-8 bytes from "Привет"
         let trainer = Trainer::new(1);
         let merges = trainer.train(&["Привет Привет Привет"]);
         let vocab = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
-        let encoder = Encoder::new(merges, pre_tokenizer, vocab);
+        let encoder = Encoder::new(merges, pre_tokenizer, vocab, vec![]);
 
         let ids = encoder.encode("Привет");
 
@@ -295,15 +353,104 @@ mod tests {
 
     #[test]
     fn encode_chinese_with_single_merge() {
-        // Merge: (151, 165) -> 256, where 151 and 165 are UTF-8 bytes from "世界"
         let trainer = Trainer::new(1);
         let merges = trainer.train(&["世界 世界 世界"]);
         let vocab = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
-        let encoder = Encoder::new(merges, pre_tokenizer, vocab);
+        let encoder = Encoder::new(merges, pre_tokenizer, vocab, vec![]);
 
         let ids = encoder.encode("世界");
 
         assert_eq!(ids, vec![228, 184, 256, 149, 140]);
+    }
+
+    #[test]
+    fn encode_special_token_at_start() {
+        let special_tokens = vec!["<|endoftext|>".to_string()];
+        let trainer = Trainer::new(0);
+        let merges = trainer.train(&[""]);
+        let vocab = Vocabulary::new(special_tokens.clone(), merges.clone());
+        let pre_tokenizer = PreTokenizer::new();
+        let encoder = Encoder::new(merges, pre_tokenizer, vocab, special_tokens);
+
+        let ids = encoder.encode("<|endoftext|>hello");
+
+        assert_eq!(ids, vec![0, 105, 102, 109, 109, 112]);
+    }
+
+    #[test]
+    fn encode_special_token_at_end() {
+        let special_tokens = vec!["<|endoftext|>".to_string()];
+        let trainer = Trainer::new(0);
+        let merges = trainer.train(&[""]);
+        let vocab = Vocabulary::new(special_tokens.clone(), merges.clone());
+        let pre_tokenizer = PreTokenizer::new();
+        let encoder = Encoder::new(merges, pre_tokenizer, vocab, special_tokens);
+
+        let ids = encoder.encode("hello<|endoftext|>");
+
+        assert_eq!(ids, vec![105, 102, 109, 109, 112, 0]);
+    }
+
+    #[test]
+    fn encode_special_token_in_middle() {
+        let special_tokens = vec!["<|endoftext|>".to_string()];
+        let trainer = Trainer::new(0);
+        let merges = trainer.train(&[""]);
+        let vocab = Vocabulary::new(special_tokens.clone(), merges.clone());
+        let pre_tokenizer = PreTokenizer::new();
+        let encoder = Encoder::new(merges, pre_tokenizer, vocab, special_tokens);
+
+        let ids = encoder.encode("hello<|endoftext|>world");
+
+        assert_eq!(
+            ids,
+            vec![105, 102, 109, 109, 112, 0, 120, 112, 115, 109, 101]
+        );
+    }
+
+    #[test]
+    fn encode_multiple_special_tokens() {
+        let special_tokens = vec!["<|endoftext|>".to_string(), "[PAD]".to_string()];
+        let trainer = Trainer::new(0);
+        let merges = trainer.train(&[""]);
+        let vocab = Vocabulary::new(special_tokens.clone(), merges.clone());
+        let pre_tokenizer = PreTokenizer::new();
+        let encoder = Encoder::new(merges, pre_tokenizer, vocab, special_tokens);
+
+        let ids = encoder.encode("<|endoftext|>hello[PAD]");
+
+        assert_eq!(ids, vec![0, 106, 103, 110, 110, 113, 1]);
+    }
+
+    #[test]
+    fn encode_adjacent_special_tokens() {
+        let special_tokens = vec!["<|endoftext|>".to_string(), "[PAD]".to_string()];
+        let trainer = Trainer::new(0);
+        let merges = trainer.train(&[""]);
+        let vocab = Vocabulary::new(special_tokens.clone(), merges.clone());
+        let pre_tokenizer = PreTokenizer::new();
+        let encoder = Encoder::new(merges, pre_tokenizer, vocab, special_tokens);
+
+        let ids = encoder.encode("<|endoftext|>[PAD]");
+
+        assert_eq!(ids, vec![0, 1]);
+    }
+
+    #[test]
+    fn encode_with_special_tokens_defined_but_not_used() {
+        let special_tokens = vec!["<|endoftext|>".to_string()];
+        let trainer = Trainer::new(0);
+        let merges = trainer.train(&[""]);
+        let vocab = Vocabulary::new(special_tokens.clone(), merges.clone());
+        let pre_tokenizer = PreTokenizer::new();
+        let encoder = Encoder::new(merges, pre_tokenizer, vocab, special_tokens);
+
+        let ids = encoder.encode("hello world");
+
+        assert_eq!(
+            ids,
+            vec![105, 102, 109, 109, 112, 33, 120, 112, 115, 109, 101]
+        );
     }
 }

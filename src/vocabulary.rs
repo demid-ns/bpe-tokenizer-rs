@@ -10,6 +10,7 @@ use crate::bytes_to_unicode;
 ///
 /// We use Vec instead of HashMap<u32, String> for `id_to_token` because IDs are
 /// sequential (0, 1, 2, ...), making Vec index access more efficient than hash lookup.
+#[derive(Clone)]
 pub struct Vocabulary {
     token_to_id: HashMap<String, u32>,
     id_to_token: Vec<String>,

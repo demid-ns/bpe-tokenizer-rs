@@ -203,10 +203,9 @@ mod tests {
         let trainer = Trainer::new(5);
         let merges = trainer.train(&["hello world hello world hello world"]);
         let vocab = Vocabulary::new(vec![], merges.clone());
-        let vocab2 = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
-        let encoder = Encoder::new(merges, pre_tokenizer, vocab);
-        let decoder = Decoder::new(vocab2);
+        let encoder = Encoder::new(merges, pre_tokenizer, vocab, vec![]);
+        let decoder = Decoder::new(encoder.vocabulary().clone());
 
         let original = "hello world";
         let ids = encoder.encode(original);
@@ -220,10 +219,9 @@ mod tests {
         let trainer = Trainer::new(10);
         let merges = trainer.train(&["Hello мир 世界 Hello мир 世界 Hello мир 世界"]);
         let vocab = Vocabulary::new(vec![], merges.clone());
-        let vocab2 = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
-        let encoder = Encoder::new(merges, pre_tokenizer, vocab);
-        let decoder = Decoder::new(vocab2);
+        let encoder = Encoder::new(merges, pre_tokenizer, vocab, vec![]);
+        let decoder = Decoder::new(encoder.vocabulary().clone());
 
         let original = "Hello мир 世界";
         let ids = encoder.encode(original);
@@ -237,10 +235,9 @@ mod tests {
         let trainer = Trainer::new(3);
         let merges = trainer.train(&["🦀 Rust 🦀 Rust 🦀 Rust"]);
         let vocab = Vocabulary::new(vec![], merges.clone());
-        let vocab2 = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
-        let encoder = Encoder::new(merges, pre_tokenizer, vocab);
-        let decoder = Decoder::new(vocab2);
+        let encoder = Encoder::new(merges, pre_tokenizer, vocab, vec![]);
+        let decoder = Decoder::new(encoder.vocabulary().clone());
 
         let original = "🦀 Rust";
         let ids = encoder.encode(original);
@@ -254,10 +251,9 @@ mod tests {
         let trainer = Trainer::new(5);
         let merges = trainer.train(&["Hello, world! How are you? Hello, world! How are you?"]);
         let vocab = Vocabulary::new(vec![], merges.clone());
-        let vocab2 = Vocabulary::new(vec![], merges.clone());
         let pre_tokenizer = PreTokenizer::new();
-        let encoder = Encoder::new(merges, pre_tokenizer, vocab);
-        let decoder = Decoder::new(vocab2);
+        let encoder = Encoder::new(merges, pre_tokenizer, vocab, vec![]);
+        let decoder = Decoder::new(encoder.vocabulary().clone());
 
         let original = "Hello, world! How are you?";
         let ids = encoder.encode(original);
@@ -275,5 +271,107 @@ mod tests {
         let decoder = Decoder::new(vocab);
 
         decoder.decode(&[9999]);
+    }
+
+    #[test]
+    fn encode_decode_round_trip_special_token_at_start() {
+        let special_tokens = vec!["<|endoftext|>".to_string()];
+        let trainer = Trainer::new(0);
+        let merges = trainer.train(&[""]);
+        let vocab = Vocabulary::new(special_tokens.clone(), merges.clone());
+        let pre_tokenizer = PreTokenizer::new();
+        let encoder = Encoder::new(merges, pre_tokenizer, vocab, special_tokens);
+        let decoder = Decoder::new(encoder.vocabulary().clone());
+
+        let original = "<|endoftext|>hello world";
+        let ids = encoder.encode(original);
+        let decoded = decoder.decode(&ids);
+
+        assert_eq!(decoded, original);
+    }
+
+    #[test]
+    fn encode_decode_round_trip_special_token_at_end() {
+        let special_tokens = vec!["<|endoftext|>".to_string()];
+        let trainer = Trainer::new(0);
+        let merges = trainer.train(&[""]);
+        let vocab = Vocabulary::new(special_tokens.clone(), merges.clone());
+        let pre_tokenizer = PreTokenizer::new();
+        let encoder = Encoder::new(merges, pre_tokenizer, vocab, special_tokens);
+        let decoder = Decoder::new(encoder.vocabulary().clone());
+
+        let original = "hello world<|endoftext|>";
+        let ids = encoder.encode(original);
+        let decoded = decoder.decode(&ids);
+
+        assert_eq!(decoded, original);
+    }
+
+    #[test]
+    fn encode_decode_round_trip_special_token_in_middle() {
+        let special_tokens = vec!["<|endoftext|>".to_string()];
+        let trainer = Trainer::new(0);
+        let merges = trainer.train(&[""]);
+        let vocab = Vocabulary::new(special_tokens.clone(), merges.clone());
+        let pre_tokenizer = PreTokenizer::new();
+        let encoder = Encoder::new(merges, pre_tokenizer, vocab, special_tokens);
+        let decoder = Decoder::new(encoder.vocabulary().clone());
+
+        let original = "hello<|endoftext|>world";
+        let ids = encoder.encode(original);
+        let decoded = decoder.decode(&ids);
+
+        assert_eq!(decoded, original);
+    }
+
+    #[test]
+    fn encode_decode_round_trip_multiple_special_tokens() {
+        let special_tokens = vec!["<|start|>".to_string(), "<|end|>".to_string()];
+        let trainer = Trainer::new(0);
+        let merges = trainer.train(&[""]);
+        let vocab = Vocabulary::new(special_tokens.clone(), merges.clone());
+        let pre_tokenizer = PreTokenizer::new();
+        let encoder = Encoder::new(merges, pre_tokenizer, vocab, special_tokens);
+        let decoder = Decoder::new(encoder.vocabulary().clone());
+
+        let original = "<|start|>hello world<|end|>";
+        let ids = encoder.encode(original);
+        let decoded = decoder.decode(&ids);
+
+        assert_eq!(decoded, original);
+    }
+
+    #[test]
+    fn encode_decode_round_trip_adjacent_special_tokens() {
+        let special_tokens = vec!["<|start|>".to_string(), "<|end|>".to_string()];
+        let trainer = Trainer::new(0);
+        let merges = trainer.train(&[""]);
+        let vocab = Vocabulary::new(special_tokens.clone(), merges.clone());
+        let pre_tokenizer = PreTokenizer::new();
+        let encoder = Encoder::new(merges, pre_tokenizer, vocab, special_tokens);
+        let decoder = Decoder::new(encoder.vocabulary().clone());
+
+        let original = "<|start|><|end|>";
+        let ids = encoder.encode(original);
+        let decoded = decoder.decode(&ids);
+
+        assert_eq!(decoded, original);
+    }
+
+    #[test]
+    fn encode_decode_round_trip_special_tokens_with_merges() {
+        let special_tokens = vec!["<|endoftext|>".to_string()];
+        let trainer = Trainer::new(5);
+        let merges = trainer.train(&["hello world hello world hello world"]);
+        let vocab = Vocabulary::new(special_tokens.clone(), merges.clone());
+        let pre_tokenizer = PreTokenizer::new();
+        let encoder = Encoder::new(merges, pre_tokenizer, vocab, special_tokens);
+        let decoder = Decoder::new(encoder.vocabulary().clone());
+
+        let original = "<|endoftext|>hello world";
+        let ids = encoder.encode(original);
+        let decoded = decoder.decode(&ids);
+
+        assert_eq!(decoded, original);
     }
 }
