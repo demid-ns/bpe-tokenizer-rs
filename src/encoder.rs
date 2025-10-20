@@ -187,7 +187,7 @@ mod tests {
 
         let ids = encoder.encode("A");
 
-        assert_eq!(ids, vec![65]);
+        assert_eq!(ids, vec![32]);
     }
 
     #[test]
@@ -200,7 +200,7 @@ mod tests {
 
         let ids = encoder.encode("AB");
 
-        assert_eq!(ids, vec![65, 66]);
+        assert_eq!(ids, vec![32, 33]);
     }
 
     #[test]
@@ -213,7 +213,7 @@ mod tests {
 
         let ids = encoder.encode("A,B");
 
-        assert_eq!(ids, vec![65, 44, 66]);
+        assert_eq!(ids, vec![32, 11, 33]);
     }
 
     #[test]
@@ -226,7 +226,7 @@ mod tests {
 
         let ids = encoder.encode("é");
 
-        assert_eq!(ids, vec![0xc3, 0xa9]);
+        assert_eq!(ids, vec![127, 102]);
     }
 
     #[test]
@@ -239,7 +239,7 @@ mod tests {
 
         let ids = encoder.encode(" A");
 
-        assert_eq!(ids, vec![32, 65]);
+        assert_eq!(ids, vec![220, 32]);
     }
 
     #[test]
@@ -279,7 +279,7 @@ mod tests {
 
         let ids = encoder.encode("日");
 
-        assert_eq!(ids, vec![0xe6, 0x97, 0xa5]);
+        assert_eq!(ids, vec![162, 245, 98]);
     }
 
     #[test]
@@ -294,9 +294,7 @@ mod tests {
 
         assert_eq!(
             ids,
-            vec![
-                0xd0, 0x9f, 0xd1, 0x80, 0xd0, 0xb8, 0xd0, 0xb2, 0xd0, 0xb5, 0xd1, 0x82
-            ]
+            vec![140, 253, 141, 222, 140, 116, 140, 110, 140, 113, 141, 224]
         );
     }
 
@@ -312,13 +310,11 @@ mod tests {
         let ids_chinese = encoder.encode("世界");
         let ids_russian = encoder.encode("Привет");
 
-        assert_eq!(ids_hello, vec![72, 101, 108, 108, 111]);
-        assert_eq!(ids_chinese, vec![0xe4, 0xb8, 0x96, 0xe7, 0x95, 0x8c]);
+        assert_eq!(ids_hello, vec![39, 68, 75, 75, 78]);
+        assert_eq!(ids_chinese, vec![160, 116, 244, 163, 243, 234]);
         assert_eq!(
             ids_russian,
-            vec![
-                0xd0, 0x9f, 0xd1, 0x80, 0xd0, 0xb8, 0xd0, 0xb2, 0xd0, 0xb5, 0xd1, 0x82
-            ]
+            vec![140, 253, 141, 222, 140, 116, 140, 110, 140, 113, 141, 224]
         );
     }
 
@@ -332,7 +328,7 @@ mod tests {
 
         let ids = encoder.encode("🦀");
 
-        assert_eq!(ids, vec![0xf0, 0x9f, 0xa6, 0x80]);
+        assert_eq!(ids, vec![172, 253, 99, 222]);
     }
 
     #[test]
@@ -347,7 +343,7 @@ mod tests {
 
         assert_eq!(
             ids,
-            vec![208, 256, 128, 208, 184, 208, 178, 208, 181, 209, 130]
+            vec![140, 253, 141, 222, 140, 116, 140, 256, 113, 141, 224]
         );
     }
 
@@ -361,7 +357,7 @@ mod tests {
 
         let ids = encoder.encode("世界");
 
-        assert_eq!(ids, vec![228, 184, 256, 149, 140]);
+        assert_eq!(ids, vec![160, 256, 163, 243, 234]);
     }
 
     #[test]
@@ -375,7 +371,7 @@ mod tests {
 
         let ids = encoder.encode("<|endoftext|>hello");
 
-        assert_eq!(ids, vec![0, 105, 102, 109, 109, 112]);
+        assert_eq!(ids, vec![0, 72, 69, 76, 76, 79]);
     }
 
     #[test]
@@ -389,7 +385,7 @@ mod tests {
 
         let ids = encoder.encode("hello<|endoftext|>");
 
-        assert_eq!(ids, vec![105, 102, 109, 109, 112, 0]);
+        assert_eq!(ids, vec![72, 69, 76, 76, 79, 0]);
     }
 
     #[test]
@@ -403,10 +399,7 @@ mod tests {
 
         let ids = encoder.encode("hello<|endoftext|>world");
 
-        assert_eq!(
-            ids,
-            vec![105, 102, 109, 109, 112, 0, 120, 112, 115, 109, 101]
-        );
+        assert_eq!(ids, vec![72, 69, 76, 76, 79, 0, 87, 79, 82, 76, 68]);
     }
 
     #[test]
@@ -420,7 +413,7 @@ mod tests {
 
         let ids = encoder.encode("<|endoftext|>hello[PAD]");
 
-        assert_eq!(ids, vec![0, 106, 103, 110, 110, 113, 1]);
+        assert_eq!(ids, vec![0, 73, 70, 77, 77, 80, 1]);
     }
 
     #[test]
@@ -448,9 +441,6 @@ mod tests {
 
         let ids = encoder.encode("hello world");
 
-        assert_eq!(
-            ids,
-            vec![105, 102, 109, 109, 112, 33, 120, 112, 115, 109, 101]
-        );
+        assert_eq!(ids, vec![72, 69, 76, 76, 79, 221, 87, 79, 82, 76, 68]);
     }
 }

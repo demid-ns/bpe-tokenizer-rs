@@ -29,8 +29,10 @@ impl Vocabulary {
 
         let byte_encoder = bytes_to_unicode();
 
-        for byte in 0u8..=255 {
-            let ch = byte_encoder[&byte];
+        let mut byte_chars: Vec<(u8, char)> = byte_encoder.iter().map(|(&b, &c)| (b, c)).collect();
+        byte_chars.sort_by_key(|(_, c)| *c as u32);
+
+        for (_, ch) in byte_chars {
             let token = ch.to_string();
             let id = id_to_token.len() as u32;
 
@@ -69,14 +71,14 @@ mod tests {
     fn vocabulary_base_tokens_correct() {
         let vocab = Vocabulary::new(vec![], vec![]);
 
-        assert_eq!(vocab.token_to_id("A"), Some(65));
-        assert_eq!(vocab.id_to_token(65), Some("A"));
+        assert_eq!(vocab.token_to_id("A"), Some(32));
+        assert_eq!(vocab.id_to_token(32), Some("A"));
 
-        assert_eq!(vocab.token_to_id("Ā"), Some(0));
-        assert_eq!(vocab.id_to_token(0), Some("Ā"));
+        assert_eq!(vocab.token_to_id("Ā"), Some(188));
+        assert_eq!(vocab.id_to_token(188), Some("Ā"));
 
-        assert_eq!(vocab.token_to_id("Ġ"), Some(32));
-        assert_eq!(vocab.id_to_token(32), Some("Ġ"));
+        assert_eq!(vocab.token_to_id("Ġ"), Some(220));
+        assert_eq!(vocab.id_to_token(220), Some("Ġ"));
     }
 
     #[test]
@@ -87,8 +89,8 @@ mod tests {
         ];
         let vocab = Vocabulary::new(vec![], merges);
 
-        assert_eq!(vocab.token_to_id("n"), Some(110));
-        assert_eq!(vocab.token_to_id("a"), Some(97));
+        assert_eq!(vocab.token_to_id("n"), Some(77));
+        assert_eq!(vocab.token_to_id("a"), Some(64));
 
         assert_eq!(vocab.token_to_id("na"), Some(256));
         assert_eq!(vocab.id_to_token(256), Some("na"));
@@ -135,11 +137,11 @@ mod tests {
         assert_eq!(vocab.token_to_id("<|endoftext|>"), Some(0));
         assert_eq!(vocab.id_to_token(0), Some("<|endoftext|>"));
 
-        assert_eq!(vocab.token_to_id("Ā"), Some(1));
-        assert_eq!(vocab.id_to_token(1), Some("Ā"));
+        assert_eq!(vocab.token_to_id("Ā"), Some(189));
+        assert_eq!(vocab.id_to_token(189), Some("Ā"));
 
-        assert_eq!(vocab.token_to_id("A"), Some(66));
-        assert_eq!(vocab.id_to_token(66), Some("A"));
+        assert_eq!(vocab.token_to_id("A"), Some(33));
+        assert_eq!(vocab.id_to_token(33), Some("A"));
     }
 
     #[test]
@@ -160,11 +162,11 @@ mod tests {
         assert_eq!(vocab.token_to_id("[UNK]"), Some(2));
         assert_eq!(vocab.id_to_token(2), Some("[UNK]"));
 
-        assert_eq!(vocab.token_to_id("Ā"), Some(3));
-        assert_eq!(vocab.id_to_token(3), Some("Ā"));
+        assert_eq!(vocab.token_to_id("Ā"), Some(191));
+        assert_eq!(vocab.id_to_token(191), Some("Ā"));
 
-        assert_eq!(vocab.token_to_id("A"), Some(68));
-        assert_eq!(vocab.id_to_token(68), Some("A"));
+        assert_eq!(vocab.token_to_id("A"), Some(35));
+        assert_eq!(vocab.id_to_token(35), Some("A"));
     }
 
     #[test]
@@ -178,9 +180,9 @@ mod tests {
 
         assert_eq!(vocab.token_to_id("<|endoftext|>"), Some(0));
 
-        assert_eq!(vocab.token_to_id("h"), Some(105));
-        assert_eq!(vocab.token_to_id("e"), Some(102));
-        assert_eq!(vocab.token_to_id("l"), Some(109));
+        assert_eq!(vocab.token_to_id("h"), Some(72));
+        assert_eq!(vocab.token_to_id("e"), Some(69));
+        assert_eq!(vocab.token_to_id("l"), Some(76));
 
         assert_eq!(vocab.token_to_id("he"), Some(257));
         assert_eq!(vocab.id_to_token(257), Some("he"));

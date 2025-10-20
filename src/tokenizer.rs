@@ -109,7 +109,7 @@ mod tests {
 
         let ids = tokenizer.encode("日");
 
-        assert_eq!(ids, vec![162, 151, 165]);
+        assert_eq!(ids, vec![162, 245, 98]);
     }
 
     #[test]
@@ -152,7 +152,7 @@ mod tests {
     fn decode_japanese() {
         let tokenizer = BpeTokenizer::new(vec![], vec![]);
 
-        let text = tokenizer.decode(&[162, 151, 165]);
+        let text = tokenizer.decode(&[162, 245, 98]);
 
         assert_eq!(text, "日");
     }
@@ -231,7 +231,7 @@ mod tests {
 
         let ids = tokenizer.encode("世界");
 
-        assert_eq!(ids, vec![228, 184, 256, 149, 140]);
+        assert_eq!(ids, vec![160, 256, 163, 243, 234]);
     }
 
     #[test]
@@ -253,7 +253,10 @@ mod tests {
 
         let ids = tokenizer.encode("Привет");
 
-        assert_eq!(ids, vec![208, 256, 128, 208, 184, 208, 178, 208, 181, 209, 130]);
+        assert_eq!(
+            ids,
+            vec![140, 253, 141, 222, 140, 116, 140, 256, 113, 141, 224]
+        );
     }
 
     #[test]
