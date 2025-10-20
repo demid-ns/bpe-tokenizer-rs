@@ -59,7 +59,7 @@ mod tests {
         let vocab = Vocabulary::new(vec![], merges);
         let decoder = Decoder::new(vocab);
 
-        let text = decoder.decode(&[65]);
+        let text = decoder.decode(&[32]);
 
         assert_eq!(text, "A");
     }
@@ -71,7 +71,7 @@ mod tests {
         let vocab = Vocabulary::new(vec![], merges);
         let decoder = Decoder::new(vocab);
 
-        let text = decoder.decode(&[65, 66, 67]);
+        let text = decoder.decode(&[32, 33, 34]);
 
         assert_eq!(text, "ABC");
     }
@@ -83,7 +83,7 @@ mod tests {
         let vocab = Vocabulary::new(vec![], merges);
         let decoder = Decoder::new(vocab);
 
-        let text = decoder.decode(&[72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100]);
+        let text = decoder.decode(&[39, 68, 75, 75, 78, 220, 54, 78, 81, 75, 67]);
 
         assert_eq!(text, "Hello World");
     }
@@ -95,7 +95,7 @@ mod tests {
         let vocab = Vocabulary::new(vec![], merges);
         let decoder = Decoder::new(vocab);
 
-        let text = decoder.decode(&[0xc3, 0xa9]);
+        let text = decoder.decode(&[127, 102]);
 
         assert_eq!(text, "é");
     }
@@ -107,7 +107,7 @@ mod tests {
         let vocab = Vocabulary::new(vec![], merges);
         let decoder = Decoder::new(vocab);
 
-        let text = decoder.decode(&[0xe6, 0x97, 0xa5]);
+        let text = decoder.decode(&[162, 245, 98]);
 
         assert_eq!(text, "日");
     }
@@ -119,9 +119,7 @@ mod tests {
         let vocab = Vocabulary::new(vec![], merges);
         let decoder = Decoder::new(vocab);
 
-        let text = decoder.decode(&[
-            0xd0, 0x9f, 0xd1, 0x80, 0xd0, 0xb8, 0xd0, 0xb2, 0xd0, 0xb5, 0xd1, 0x82,
-        ]);
+        let text = decoder.decode(&[140, 253, 141, 222, 140, 116, 140, 110, 140, 113, 141, 224]);
 
         assert_eq!(text, "Привет");
     }
@@ -133,7 +131,7 @@ mod tests {
         let vocab = Vocabulary::new(vec![], merges);
         let decoder = Decoder::new(vocab);
 
-        let text = decoder.decode(&[0xe4, 0xb8, 0x96, 0xe7, 0x95, 0x8c]);
+        let text = decoder.decode(&[160, 116, 244, 163, 243, 234]);
 
         assert_eq!(text, "世界");
     }
@@ -145,7 +143,7 @@ mod tests {
         let vocab = Vocabulary::new(vec![], merges);
         let decoder = Decoder::new(vocab);
 
-        let text = decoder.decode(&[0xf0, 0x9f, 0xa6, 0x80]);
+        let text = decoder.decode(&[172, 253, 99, 222]);
 
         assert_eq!(text, "🦀");
     }
@@ -169,7 +167,7 @@ mod tests {
         let vocab = Vocabulary::new(vec![], merges);
         let decoder = Decoder::new(vocab);
 
-        let text = decoder.decode(&[99, 256, 100]);
+        let text = decoder.decode(&[66, 256, 67]);
 
         assert_eq!(text, "cabd");
     }
@@ -181,7 +179,7 @@ mod tests {
         let vocab = Vocabulary::new(vec![], merges);
         let decoder = Decoder::new(vocab);
 
-        let text = decoder.decode(&[208, 256, 128, 208, 184, 208, 178, 208, 181, 209, 130]);
+        let text = decoder.decode(&[140, 253, 141, 222, 140, 116, 140, 256, 113, 141, 224]);
 
         assert_eq!(text, "Привет");
     }
@@ -193,7 +191,7 @@ mod tests {
         let vocab = Vocabulary::new(vec![], merges);
         let decoder = Decoder::new(vocab);
 
-        let text = decoder.decode(&[228, 184, 256, 149, 140]);
+        let text = decoder.decode(&[160, 256, 163, 243, 234]);
 
         assert_eq!(text, "世界");
     }
