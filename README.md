@@ -1,40 +1,39 @@
 # BPE Tokenizer
 
-A Byte Pair Encoding (BPE) tokenizer implementation in Rust - created for learning purposes with focus on the core BPE training algorithm.
+A Byte Pair Encoding (BPE) tokenizer implementation in Rust with byte-level pre-tokenization (GPT-2 style). Fully compatible with HuggingFace tokenizers when configured with ByteLevel pre-tokenizer and decoder.
 
 > [!IMPORTANT]
 > This project is currently in active development. The API may change and features are still being implemented.
 
-## How it works
+## Features
 
-The tokenizer implements the standard BPE training algorithm:
-
-- Starts with character-level vocabulary for each word
-- Iteratively finds the most frequent adjacent token pairs
-- Merges the most frequent pairs into single tokens
-- Continues for a specified number of merge operations
-- Uses lexicographic tie-breaking for consistent results
+- Byte-level BPE tokenization (GPT-2 style)
+- 100% compatible with HuggingFace tokenizers
+- Special token support
+- Encode/decode with merge rules
+- Token ID-based tie-breaking for deterministic training
 
 ## Usage
 
 ```rust
-use bpe_tokenizer_rs::Trainer;
+use bpe_tokenizer_rs::{Trainer, BpeTokenizer};
 
-let trainer = Trainer::new(100); // 100 merge operations
-let training_texts = vec!["hello world", "hello rust", "world peace"];
-let vocab = trainer.train(&training_texts);
+// Train a tokenizer
+let trainer = Trainer::new(100);
+let training_texts = vec!["hello world", "hello rust"];
+let merges = trainer.train(&training_texts);
 
-// The vocab contains the learned BPE tokens with their frequencies
-for (tokens, count) in vocab {
-    println!("{:?}: {}", tokens, count);
-}
+// Create tokenizer with special tokens
+let special_tokens = vec!["<|endoftext|>".to_string()];
+let tokenizer = BpeTokenizer::new(merges, special_tokens);
+
+// Encode and decode
+let ids = tokenizer.encode("hello world");
+let text = tokenizer.decode(&ids);
 ```
 
-Run the tests:
+## Testing
+
 ```bash
 cargo test
 ```
-
-## Philosophy
-
-Clean implementation focusing on the core BPE algorithm mechanics rather than comprehensive tokenization features. Designed for educational purposes and understanding how BPE tokenizers work under the hood.
