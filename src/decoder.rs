@@ -1,18 +1,85 @@
 use crate::{Vocabulary, unicode_to_bytes};
+use std::collections::HashMap;
 
+/// Decodes token IDs back into text using the vocabulary.
+///
+/// The decoder performs the reverse of encoding:
+/// 1. Maps each token ID to its token string using the vocabulary
+/// 2. Converts the Unicode representation back to bytes
+/// 3. Assembles bytes into a UTF-8 string
+///
+/// # Performance
+///
+/// The decoder caches the unicode-to-byte mapping to avoid reconstructing it
+/// on every decode operation, improving performance for repeated decodings.
+///
+/// # Examples
+///
+/// ```
+/// use bpe_tokenizer_rs::{Decoder, Vocabulary};
+///
+/// let vocab = Vocabulary::new(vec![], vec![]);
+/// let decoder = Decoder::new(vocab);
+///
+/// let text = decoder.decode(&[32, 33, 34]);
+/// assert_eq!(text, "ABC");
+/// ```
 pub struct Decoder {
     vocabulary: Vocabulary,
+    unicode_to_byte: HashMap<char, u8>,
 }
 
 impl Decoder {
+    /// Creates a new decoder with the given vocabulary.
+    ///
+    /// # Arguments
+    ///
+    /// * `vocabulary` - The vocabulary mapping token IDs to tokens
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bpe_tokenizer_rs::{Decoder, Vocabulary};
+    ///
+    /// let vocab = Vocabulary::new(vec![], vec![]);
+    /// let decoder = Decoder::new(vocab);
+    /// ```
     pub fn new(vocabulary: Vocabulary) -> Self {
-        Decoder { vocabulary }
+        let unicode_to_byte = unicode_to_bytes();
+        Decoder {
+            vocabulary,
+            unicode_to_byte,
+        }
     }
 
-    /// Decodes a sequence of token IDs back into the original text.
+    /// Decodes a sequence of token IDs back into text.
+    ///
+    /// # Arguments
+    ///
+    /// * `token_ids` - Slice of token IDs to decode
+    ///
+    /// # Returns
+    ///
+    /// The decoded text as a UTF-8 string.
+    ///
+    /// # Panics
+    ///
+    /// Panics if:
+    /// - A token ID is not found in the vocabulary
+    /// - The resulting bytes cannot be decoded as valid UTF-8
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bpe_tokenizer_rs::{Decoder, Vocabulary};
+    ///
+    /// let vocab = Vocabulary::new(vec![], vec![]);
+    /// let decoder = Decoder::new(vocab);
+    ///
+    /// let text = decoder.decode(&[39, 68, 75, 75, 78]);
+    /// assert_eq!(text, "Hello");
+    /// ```
     pub fn decode(&self, token_ids: &[u32]) -> String {
-        let unicode_to_byte = unicode_to_bytes();
-
         let bytes: Vec<u8> = token_ids
             .iter()
             .flat_map(|&token_id| {
@@ -22,7 +89,7 @@ impl Decoder {
                         token_id
                     )
                 });
-                token.chars().map(|ch| unicode_to_byte[&ch]).collect::<Vec<u8>>()
+                token.chars().map(|ch| self.unicode_to_byte[&ch]).collect::<Vec<u8>>()
             })
             .collect();
 

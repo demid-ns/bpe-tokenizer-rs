@@ -1,11 +1,64 @@
 use crate::{Decoder, Encoder, PreTokenizer, Trainer, Vocabulary};
 
+/// A complete Byte Pair Encoding (BPE) tokenizer for encoding and decoding text.
+///
+/// `BpeTokenizer` provides a high-level interface for BPE tokenization, combining
+/// an encoder and decoder with a shared vocabulary. It supports:
+/// - Byte-level encoding compatible with GPT-2
+/// - Special tokens (e.g., `<|endoftext|>`, `[PAD]`)
+/// - Custom merge rules learned from training data
+///
+/// # Examples
+///
+/// ## Creating from merge rules
+///
+/// ```
+/// use bpe_tokenizer_rs::BpeTokenizer;
+///
+/// let merges = vec![("h".to_string(), "e".to_string())];
+/// let special_tokens = vec!["<|endoftext|>".to_string()];
+/// let tokenizer = BpeTokenizer::new(merges, special_tokens);
+///
+/// let ids = tokenizer.encode("hello");
+/// let text = tokenizer.decode(&ids);
+/// assert_eq!(text, "hello");
+/// ```
+///
+/// ## Training from scratch
+///
+/// ```
+/// use bpe_tokenizer_rs::{BpeTokenizer, Trainer};
+///
+/// let trainer = Trainer::new(10);
+/// let training_data = &["hello world", "hello there"];
+/// let tokenizer = BpeTokenizer::from_trainer(&trainer, training_data, vec![]);
+///
+/// let ids = tokenizer.encode("hello");
+/// let text = tokenizer.decode(&ids);
+/// assert_eq!(text, "hello");
+/// ```
 pub struct BpeTokenizer {
     encoder: Encoder,
     decoder: Decoder,
 }
 
 impl BpeTokenizer {
+    /// Creates a new tokenizer from merge rules and special tokens.
+    ///
+    /// # Arguments
+    ///
+    /// * `merges` - BPE merge rules as (token1, token2) pairs
+    /// * `special_tokens` - List of special tokens (e.g., `<|endoftext|>`, `[PAD]`)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bpe_tokenizer_rs::BpeTokenizer;
+    ///
+    /// let tokenizer = BpeTokenizer::new(vec![], vec![]);
+    /// let ids = tokenizer.encode("Hello");
+    /// assert_eq!(tokenizer.decode(&ids), "Hello");
+    /// ```
     pub fn new(merges: Vec<(String, String)>, special_tokens: Vec<String>) -> Self {
         let pre_tokenizer = PreTokenizer::new();
         let vocabulary = Vocabulary::new(special_tokens.clone(), merges.clone());
@@ -15,14 +68,82 @@ impl BpeTokenizer {
         BpeTokenizer { encoder, decoder }
     }
 
+    /// Encodes text into a sequence of token IDs.
+    ///
+    /// # Arguments
+    ///
+    /// * `text` - The text to encode
+    ///
+    /// # Returns
+    ///
+    /// A vector of token IDs representing the encoded text.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bpe_tokenizer_rs::BpeTokenizer;
+    ///
+    /// let tokenizer = BpeTokenizer::new(vec![], vec![]);
+    /// let ids = tokenizer.encode("AB");
+    /// assert_eq!(ids, vec![32, 33]);
+    /// ```
     pub fn encode(&self, text: &str) -> Vec<u32> {
         self.encoder.encode(text)
     }
 
+    /// Decodes a sequence of token IDs back into text.
+    ///
+    /// # Arguments
+    ///
+    /// * `ids` - Slice of token IDs to decode
+    ///
+    /// # Returns
+    ///
+    /// The decoded text as a UTF-8 string.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bpe_tokenizer_rs::BpeTokenizer;
+    ///
+    /// let tokenizer = BpeTokenizer::new(vec![], vec![]);
+    /// let text = tokenizer.decode(&[32, 33]);
+    /// assert_eq!(text, "AB");
+    /// ```
     pub fn decode(&self, ids: &[u32]) -> String {
         self.decoder.decode(ids)
     }
 
+    /// Creates a tokenizer by training on the provided texts.
+    ///
+    /// This is a convenience method that trains a BPE model and creates a tokenizer
+    /// in one step.
+    ///
+    /// # Arguments
+    ///
+    /// * `trainer` - The trainer configured with the desired number of merges
+    /// * `training_texts` - Texts to train on
+    /// * `special_tokens` - List of special tokens to include
+    ///
+    /// # Returns
+    ///
+    /// A new `BpeTokenizer` with merge rules learned from the training data.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bpe_tokenizer_rs::{BpeTokenizer, Trainer};
+    ///
+    /// let trainer = Trainer::new(5);
+    /// let tokenizer = BpeTokenizer::from_trainer(
+    ///     &trainer,
+    ///     &["hello world", "hello"],
+    ///     vec![]
+    /// );
+    ///
+    /// let ids = tokenizer.encode("hello");
+    /// assert_eq!(tokenizer.decode(&ids), "hello");
+    /// ```
     pub fn from_trainer(
         trainer: &Trainer,
         training_texts: &[&str],

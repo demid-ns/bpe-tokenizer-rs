@@ -2,14 +2,43 @@ use std::collections::HashMap;
 
 use crate::bytes_to_unicode;
 
-/// Manages bidirectional mapping between tokens and their IDs.
+/// Manages bidirectional mapping between tokens and their IDs for BPE tokenization.
 ///
-/// Uses two data structures for O(1) lookups in both directions:
+/// The vocabulary maintains a complete mapping between string tokens and their numeric IDs,
+/// supporting O(1) lookups in both directions. It includes:
+/// - Special tokens (e.g., `<|endoftext|>`, `[PAD]`) starting at ID 0
+/// - Base byte-level tokens (256 characters) covering all possible bytes
+/// - Merged tokens learned during BPE training
+///
+/// # Token ID Assignment
+///
+/// IDs are assigned sequentially in this order:
+/// 1. Special tokens: 0, 1, 2, ...
+/// 2. Byte-level tokens: sorted by Unicode character value
+/// 3. Merged tokens: in the order they were learned during training
+///
+/// # Performance
+///
+/// Uses two data structures for optimal performance:
 /// - `token_to_id`: HashMap for fast token → ID lookup (used during encoding)
 /// - `id_to_token`: Vec for fast ID → token lookup (used during decoding)
 ///
-/// We use Vec instead of HashMap<u32, String> for `id_to_token` because IDs are
+/// Vec is used instead of HashMap<u32, String> for `id_to_token` because IDs are
 /// sequential (0, 1, 2, ...), making Vec index access more efficient than hash lookup.
+///
+/// # Examples
+///
+/// ```
+/// use bpe_tokenizer_rs::Vocabulary;
+///
+/// let special_tokens = vec!["<|endoftext|>".to_string()];
+/// let merges = vec![("h".to_string(), "e".to_string())];
+/// let vocab = Vocabulary::new(special_tokens, merges);
+///
+/// assert_eq!(vocab.token_to_id("<|endoftext|>"), Some(0));
+/// assert_eq!(vocab.token_to_id("he"), Some(257));
+/// assert_eq!(vocab.id_to_token(0), Some("<|endoftext|>"));
+/// ```
 #[derive(Clone)]
 pub struct Vocabulary {
     token_to_id: HashMap<String, u32>,
@@ -17,35 +46,53 @@ pub struct Vocabulary {
 }
 
 impl Vocabulary {
+    /// Creates a new vocabulary from special tokens and merge rules.
+    ///
+    /// The vocabulary is constructed by adding tokens in this order:
+    /// 1. Special tokens (if any)
+    /// 2. All 256 byte-level base tokens (sorted by Unicode value)
+    /// 3. Merged tokens from BPE training
+    ///
+    /// # Arguments
+    ///
+    /// * `special_tokens` - Vector of special tokens (e.g., `<|endoftext|>`, `[PAD]`)
+    /// * `merges` - Vector of merge rules as (token1, token2) pairs
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bpe_tokenizer_rs::Vocabulary;
+    ///
+    /// let vocab = Vocabulary::new(vec![], vec![]);
+    /// assert_eq!(vocab.token_to_id("A"), Some(32));
+    /// ```
     pub fn new(special_tokens: Vec<String>, merges: Vec<(String, String)>) -> Self {
-        let mut token_to_id = HashMap::new();
-        let mut id_to_token = Vec::new();
+        let total_size = special_tokens.len() + 256 + merges.len();
+        let mut token_to_id = HashMap::with_capacity(total_size);
+        let mut id_to_token = Vec::with_capacity(total_size);
 
-        for special_token in &special_tokens {
+        for special_token in special_tokens {
             let id = id_to_token.len() as u32;
-            id_to_token.push(special_token.clone());
             token_to_id.insert(special_token.clone(), id);
+            id_to_token.push(special_token);
         }
 
         let byte_encoder = bytes_to_unicode();
-
         let mut byte_chars: Vec<(u8, char)> = byte_encoder.iter().map(|(&b, &c)| (b, c)).collect();
         byte_chars.sort_by_key(|(_, c)| *c as u32);
 
         for (_, ch) in byte_chars {
             let token = ch.to_string();
             let id = id_to_token.len() as u32;
-
-            id_to_token.push(token.clone());
-            token_to_id.insert(token, id);
+            token_to_id.insert(token.clone(), id);
+            id_to_token.push(token);
         }
 
         for (part1, part2) in merges {
             let token = format!("{}{}", part1, part2);
             let id = id_to_token.len() as u32;
-
-            id_to_token.push(token.clone());
-            token_to_id.insert(token, id);
+            token_to_id.insert(token.clone(), id);
+            id_to_token.push(token);
         }
 
         Vocabulary {
@@ -54,10 +101,50 @@ impl Vocabulary {
         }
     }
 
+    /// Converts a token string to its corresponding ID.
+    ///
+    /// # Arguments
+    ///
+    /// * `token` - The token string to look up
+    ///
+    /// # Returns
+    ///
+    /// * `Some(id)` if the token exists in the vocabulary
+    /// * `None` if the token is not found
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bpe_tokenizer_rs::Vocabulary;
+    ///
+    /// let vocab = Vocabulary::new(vec![], vec![]);
+    /// assert_eq!(vocab.token_to_id("A"), Some(32));
+    /// assert_eq!(vocab.token_to_id("unknown"), None);
+    /// ```
     pub fn token_to_id(&self, token: &str) -> Option<u32> {
         self.token_to_id.get(token).copied()
     }
 
+    /// Converts a token ID to its corresponding string.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The token ID to look up
+    ///
+    /// # Returns
+    ///
+    /// * `Some(&str)` if the ID exists in the vocabulary
+    /// * `None` if the ID is out of bounds
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bpe_tokenizer_rs::Vocabulary;
+    ///
+    /// let vocab = Vocabulary::new(vec![], vec![]);
+    /// assert_eq!(vocab.id_to_token(32), Some("A"));
+    /// assert_eq!(vocab.id_to_token(99999), None);
+    /// ```
     pub fn id_to_token(&self, id: u32) -> Option<&str> {
         self.id_to_token.get(id as usize).map(|s| s.as_str())
     }

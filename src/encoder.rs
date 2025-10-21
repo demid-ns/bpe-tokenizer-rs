@@ -2,30 +2,113 @@ use std::collections::HashMap;
 
 use crate::{PreTokenizer, Vocabulary, bytes_to_unicode};
 
+/// Encodes text into token IDs using Byte Pair Encoding (BPE).
+///
+/// The encoder converts input text into a sequence of token IDs by:
+/// 1. Splitting text on special tokens (if any)
+/// 2. Pre-tokenizing regular text into words/chunks using GPT-2 pattern
+/// 3. Converting each chunk to byte-level Unicode representation
+/// 4. Applying learned merge rules to create larger tokens
+/// 5. Looking up final tokens in the vocabulary to get IDs
+///
+/// # Performance
+///
+/// The encoder caches the byte-to-unicode mapping to avoid reconstructing it
+/// on every encode operation, improving performance for repeated encodings.
+///
+/// # Examples
+///
+/// ```
+/// use bpe_tokenizer_rs::{Encoder, PreTokenizer, Vocabulary, Trainer};
+///
+/// let trainer = Trainer::new(0);
+/// let merges = trainer.train(&[""]);
+/// let vocab = Vocabulary::new(vec![], merges.clone());
+/// let pre_tokenizer = PreTokenizer::new();
+/// let encoder = Encoder::new(merges, pre_tokenizer, vocab, vec![]);
+///
+/// let ids = encoder.encode("Hello");
+/// assert_eq!(ids, vec![39, 68, 75, 75, 78]);
+/// ```
 pub struct Encoder {
     merge_rules: Vec<(String, String)>,
     pre_tokenizer: PreTokenizer,
     vocabulary: Vocabulary,
     special_tokens: Vec<String>,
+    byte_encoder: HashMap<u8, char>,
 }
 
 impl Encoder {
+    /// Creates a new encoder with the given merge rules, pre-tokenizer, vocabulary, and special tokens.
+    ///
+    /// # Arguments
+    ///
+    /// * `merge_rules` - BPE merge rules learned during training as (token1, token2) pairs
+    /// * `pre_tokenizer` - Pre-tokenizer for splitting text into chunks
+    /// * `vocabulary` - Vocabulary mapping tokens to IDs
+    /// * `special_tokens` - List of special tokens to recognize (e.g., `<|endoftext|>`)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bpe_tokenizer_rs::{Encoder, PreTokenizer, Vocabulary};
+    ///
+    /// let vocab = Vocabulary::new(vec![], vec![]);
+    /// let pre_tokenizer = PreTokenizer::new();
+    /// let encoder = Encoder::new(vec![], pre_tokenizer, vocab, vec![]);
+    /// ```
     pub fn new(
         merge_rules: Vec<(String, String)>,
         pre_tokenizer: PreTokenizer,
         vocabulary: Vocabulary,
         special_tokens: Vec<String>,
     ) -> Self {
+        let byte_encoder = bytes_to_unicode();
         Encoder {
             merge_rules,
             pre_tokenizer,
             vocabulary,
             special_tokens,
+            byte_encoder,
         }
     }
 
+    /// Encodes text into a sequence of token IDs.
+    ///
+    /// The encoding process:
+    /// 1. Splits text on special tokens
+    /// 2. For regular text: pre-tokenizes, converts to bytes, applies merges
+    /// 3. For special tokens: directly maps to their IDs
+    /// 4. Returns the concatenated sequence of IDs
+    ///
+    /// # Arguments
+    ///
+    /// * `text` - The text to encode
+    ///
+    /// # Returns
+    ///
+    /// A vector of token IDs representing the encoded text.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a token is not found in the vocabulary, indicating a mismatch
+    /// between the vocabulary and merge rules.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bpe_tokenizer_rs::{Encoder, PreTokenizer, Vocabulary, Trainer};
+    ///
+    /// let trainer = Trainer::new(0);
+    /// let merges = trainer.train(&[""]);
+    /// let vocab = Vocabulary::new(vec![], merges.clone());
+    /// let pre_tokenizer = PreTokenizer::new();
+    /// let encoder = Encoder::new(merges, pre_tokenizer, vocab, vec![]);
+    ///
+    /// let ids = encoder.encode("AB");
+    /// assert_eq!(ids, vec![32, 33]);
+    /// ```
     pub fn encode(&self, text: &str) -> Vec<u32> {
-        let byte_encoder = bytes_to_unicode();
         let chunks = self.split_on_special_tokens(text);
 
         chunks
@@ -34,13 +117,13 @@ impl Encoder {
                 if is_special {
                     vec![self.token_to_id(&chunk_text)]
                 } else {
-                    self.encode_regular_text(&byte_encoder, &chunk_text)
+                    self.encode_regular_text(&chunk_text)
                 }
             })
             .collect()
     }
 
-    fn encode_regular_text(&self, byte_encoder: &HashMap<u8, char>, text: &str) -> Vec<u32> {
+    fn encode_regular_text(&self, text: &str) -> Vec<u32> {
         self.pre_tokenizer
             .pre_tokenize(text)
             .iter()
@@ -48,7 +131,7 @@ impl Encoder {
                 let unicode_symbols: Vec<String> = word
                     .as_bytes()
                     .iter()
-                    .map(|&byte| byte_encoder[&byte].to_string())
+                    .map(|&byte| self.byte_encoder[&byte].to_string())
                     .collect();
 
                 let merged_tokens = self.apply_merge_rules(unicode_symbols);
@@ -85,7 +168,7 @@ impl Encoder {
 
     fn split_chunk_on_token(&self, text: &str, special_token: &str) -> Vec<(String, bool)> {
         let parts: Vec<&str> = text.split(special_token).collect();
-        let mut result = Vec::new();
+        let mut result = Vec::with_capacity(parts.len() * 2);
 
         for (i, part) in parts.iter().enumerate() {
             if !part.is_empty() {
@@ -111,7 +194,7 @@ impl Encoder {
         while let Some((rule_idx, positions)) = self.find_best_pair(&symbols) {
             let (first, second) = &self.merge_rules[rule_idx];
             let merged = format!("{}{}", first, second);
-            let mut new_symbols = Vec::new();
+            let mut new_symbols = Vec::with_capacity(symbols.len() - positions.len());
             let mut i = 0;
 
             while i < symbols.len() {
@@ -119,7 +202,7 @@ impl Encoder {
                     new_symbols.push(merged.clone());
                     i += 2;
                 } else {
-                    new_symbols.push(symbols[i].clone());
+                    new_symbols.push(std::mem::take(&mut symbols[i]));
                     i += 1;
                 }
             }
