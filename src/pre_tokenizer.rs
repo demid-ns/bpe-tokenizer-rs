@@ -1,5 +1,30 @@
 use regex::Regex;
 
+/// Pre-tokenizes text into chunks before BPE encoding.
+///
+/// The pre-tokenizer splits text into words, punctuation, and whitespace chunks
+/// using a regex pattern compatible with GPT-2's tokenization strategy. This ensures
+/// that BPE merges don't cross logical word boundaries.
+///
+/// # Pattern
+///
+/// The regex pattern matches:
+/// - Contractions: `'s`, `'t`, `'re`, `'ve`, `'m`, `'ll`, `'d`
+/// - Letters (with optional leading space): ` ?\p{L}+`
+/// - Numbers (with optional leading space): ` ?\p{N}+`
+/// - Punctuation (with optional leading space): ` ?[^\s\p{L}\p{N}]+`
+/// - Remaining whitespace: `\s+`
+///
+/// # Examples
+///
+/// ```
+/// use bpe_tokenizer_rs::PreTokenizer;
+///
+/// let pre_tokenizer = PreTokenizer::new();
+/// let tokens = pre_tokenizer.pre_tokenize("Hello, world!");
+///
+/// assert_eq!(tokens, vec!["Hello", ",", " world", "!"]);
+/// ```
 pub struct PreTokenizer {
     pub pattern: Regex,
 }
@@ -11,10 +36,16 @@ impl Default for PreTokenizer {
 }
 
 impl PreTokenizer {
+    /// Creates a new pre-tokenizer with GPT-2 style regex pattern.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bpe_tokenizer_rs::PreTokenizer;
+    ///
+    /// let pre_tokenizer = PreTokenizer::new();
+    /// ```
     pub fn new() -> Self {
-        // GPT-2 regex pattern, simplified for Rust's regex crate (no lookahead support)
-        // Matches: contractions, letters (with optional space), numbers (with optional space),
-        // punctuation (with optional space), and remaining whitespace
         let pattern =
             Regex::new(r"'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+")
                 .unwrap();
@@ -22,6 +53,29 @@ impl PreTokenizer {
         PreTokenizer { pattern }
     }
 
+    /// Pre-tokenizes text into chunks.
+    ///
+    /// Splits the input text according to the GPT-2 pattern, preserving spaces
+    /// that precede words, numbers, or punctuation.
+    ///
+    /// # Arguments
+    ///
+    /// * `text` - The text to pre-tokenize
+    ///
+    /// # Returns
+    ///
+    /// A vector of string chunks representing the pre-tokenized text.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bpe_tokenizer_rs::PreTokenizer;
+    ///
+    /// let pre_tokenizer = PreTokenizer::new();
+    /// let tokens = pre_tokenizer.pre_tokenize("I'm happy!");
+    ///
+    /// assert_eq!(tokens, vec!["I", "'m", " happy", "!"]);
+    /// ```
     pub fn pre_tokenize(&self, text: &str) -> Vec<String> {
         self.pattern
             .find_iter(text)

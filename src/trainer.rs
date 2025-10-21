@@ -3,14 +3,51 @@ use std::collections::HashMap;
 
 /// Trains a BPE tokenizer by learning merge rules from training data.
 ///
-/// Uses byte-level tokenization with pre-tokenization (GPT-2 style).
+/// The trainer implements the Byte Pair Encoding training algorithm:
+/// 1. Pre-tokenizes input text into words/chunks
+/// 2. Converts each chunk to byte-level Unicode representation
+/// 3. Counts frequency of adjacent token pairs
+/// 4. Iteratively merges the most frequent pair
+/// 5. Repeats until the desired number of merges is reached
+///
+/// # Algorithm
+///
+/// The training process uses GPT-2 style byte-level encoding with a pre-tokenizer
+/// that splits on whitespace and punctuation. Merge rules are learned by:
+/// - Finding the most frequent adjacent pair of tokens
+/// - Breaking ties by preferring pairs with lower token IDs
+/// - Creating a new merged token from the pair
+/// - Updating all occurrences in the training data
+///
+/// # Examples
+///
+/// ```
+/// use bpe_tokenizer_rs::Trainer;
+///
+/// let trainer = Trainer::new(10);
+/// let merges = trainer.train(&["hello world", "hello there"]);
+///
+/// assert!(merges.len() <= 10);
+/// ```
 pub struct Trainer {
     num_merges: usize,
     pre_tokenizer: PreTokenizer,
 }
 
 impl Trainer {
-    /// Creates a new Trainer that will learn the specified number of merge rules.
+    /// Creates a new trainer that will learn the specified number of merge rules.
+    ///
+    /// # Arguments
+    ///
+    /// * `num_merges` - Maximum number of merge rules to learn
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bpe_tokenizer_rs::Trainer;
+    ///
+    /// let trainer = Trainer::new(100);
+    /// ```
     pub fn new(num_merges: usize) -> Self {
         Self {
             num_merges,
@@ -20,8 +57,30 @@ impl Trainer {
 
     /// Trains the BPE tokenizer on the given texts.
     ///
-    /// Returns a list of merge rules learned from the training data.
-    /// Each merge is a pair of strings (token1, token2) that should be merged.
+    /// Learns merge rules by iteratively finding and merging the most frequent
+    /// adjacent token pairs in the training data. Training stops when either:
+    /// - The requested number of merges is reached
+    /// - No more pairs can be merged (all tokens are isolated)
+    ///
+    /// # Arguments
+    ///
+    /// * `training_texts` - Slice of text strings to train on
+    ///
+    /// # Returns
+    ///
+    /// A vector of merge rules as (token1, token2) pairs, in the order they were learned.
+    /// The length may be less than `num_merges` if training converges early.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bpe_tokenizer_rs::Trainer;
+    ///
+    /// let trainer = Trainer::new(5);
+    /// let merges = trainer.train(&["hello world", "hello there"]);
+    ///
+    /// assert!(merges.len() <= 5);
+    /// ```
     pub fn train(&self, training_texts: &[&str]) -> Vec<(String, String)> {
         let mut merges = Vec::with_capacity(self.num_merges);
         let mut word_freqs = self.build_word_frequencies(training_texts);
@@ -81,17 +140,15 @@ impl Trainer {
     fn compute_pair_frequencies(
         word_freqs: &HashMap<Vec<String>, usize>,
     ) -> HashMap<(String, String), usize> {
-        word_freqs
-            .iter()
-            .flat_map(|(symbols, &count)| {
-                symbols
-                    .windows(2)
-                    .map(move |pair| ((pair[0].clone(), pair[1].clone()), count))
-            })
-            .fold(HashMap::new(), |mut pair_freqs, (pair, count)| {
-                *pair_freqs.entry(pair).or_insert(0) += count;
-                pair_freqs
-            })
+        let mut pair_freqs = HashMap::new();
+
+        for (symbols, &count) in word_freqs.iter() {
+            for pair in symbols.windows(2) {
+                *pair_freqs.entry((pair[0].clone(), pair[1].clone())).or_insert(0) += count;
+            }
+        }
+
+        pair_freqs
     }
 
     fn find_best_pair(
@@ -143,7 +200,7 @@ impl Trainer {
         pair: &(String, String),
         merged_token: &str,
     ) -> Vec<String> {
-        let mut result = Vec::with_capacity(symbols.len());
+        let mut result = Vec::new();
         let mut i = 0;
 
         while i < symbols.len() {
