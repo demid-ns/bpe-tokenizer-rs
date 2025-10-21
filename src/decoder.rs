@@ -46,7 +46,10 @@ impl Decoder {
     /// ```
     pub fn new(vocabulary: Vocabulary) -> Self {
         let unicode_to_byte = unicode_to_bytes();
-        Decoder { vocabulary, unicode_to_byte }
+        Decoder {
+            vocabulary,
+            unicode_to_byte,
+        }
     }
 
     /// Decodes a sequence of token IDs back into text.

@@ -144,7 +144,9 @@ impl Trainer {
 
         for (symbols, &count) in word_freqs.iter() {
             for pair in symbols.windows(2) {
-                *pair_freqs.entry((pair[0].clone(), pair[1].clone())).or_insert(0) += count;
+                *pair_freqs
+                    .entry((pair[0].clone(), pair[1].clone()))
+                    .or_insert(0) += count;
             }
         }
 

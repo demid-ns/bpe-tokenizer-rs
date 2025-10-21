@@ -28,7 +28,11 @@ fn main() {
         "How vexingly quick daft zebras jump!",
     ];
 
-    println!("Training on {} sentences with max {} merges...", training_data.len(), 50);
+    println!(
+        "Training on {} sentences with max {} merges...",
+        training_data.len(),
+        50
+    );
     let merges = trainer.train(&training_data);
     println!("Learned {} merge rules\n", merges.len());
 
@@ -98,8 +102,10 @@ fn main() {
     println!("Text: {}", comparison_text);
     println!("Without merges: {} tokens", no_merge_ids.len());
     println!("With merges: {} tokens", with_merge_ids.len());
-    println!("Compression: {:.1}%\n",
-             (1.0 - with_merge_ids.len() as f64 / no_merge_ids.len() as f64) * 100.0);
+    println!(
+        "Compression: {:.1}%\n",
+        (1.0 - with_merge_ids.len() as f64 / no_merge_ids.len() as f64) * 100.0
+    );
 
     // Example 6: Using from_trainer convenience method
     println!("Example 6: Using from_trainer()");
@@ -107,11 +113,7 @@ fn main() {
     let quick_trainer = Trainer::new(20);
     let quick_data = vec!["Rust is fast", "Rust is safe", "Rust is fun"];
 
-    let quick_tokenizer = BpeTokenizer::from_trainer(
-        &quick_trainer,
-        &quick_data,
-        vec![]
-    );
+    let quick_tokenizer = BpeTokenizer::from_trainer(&quick_trainer, &quick_data, vec![]);
 
     let quick_text = "Rust is awesome";
     let quick_ids = quick_tokenizer.encode(quick_text);
