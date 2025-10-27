@@ -7,5 +7,5 @@ edition = "2024"
 regex = "1.12.2"
 
 [dev-dependencies]
-tokenizers = "0.20"
+tokenizers = "0.22"
 tempfile = "3.14"
